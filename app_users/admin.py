@@ -6,7 +6,7 @@ from .models import AppUser
 @admin.register(AppUser)
 class UserAdmin(BaseUserAdmin):
     list_display = ('email', 'username', 'first_name', 'last_name', 'provider', 'is_active', 'is_verified', 'date_joined')
-    list_filter = ('is_active', 'is_staff', 'is_superuser', 'provider', 'is_verified', 'date_joined')
+    list_filter = ('is_active', 'is_staff', 'is_superuser', 'provider', 'is_verified', 'date_joined','provider')
     search_fields = ('email', 'username', 'first_name', 'last_name')
     ordering = ('-date_joined',)
     
