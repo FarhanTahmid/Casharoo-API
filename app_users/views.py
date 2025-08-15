@@ -3,6 +3,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
@@ -22,6 +25,28 @@ def get_tokens_for_user(user):
         'refresh': str(refresh),
         'access': str(refresh.access_token),
     }
+
+
+class AuthStatusView(APIView):
+    """Check if user is authenticated or not"""
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        '''Check if the user is authenticated and return user details'''
+        try:
+            user=request.user
+            serializer = UserProfileSerializer(user)
+            return Response({
+                'isAuthenticated': True,
+                'user_data': serializer.data
+            }, status=status.HTTP_200_OK)
+        except (InvalidToken, TokenError) as e:
+            return Response({
+                'isAuthenticated': False,
+                'error': 'Invalid or expired token',
+                'detail': str(e)
+            }, status=status.HTTP_401_UNAUTHORIZED)
 
 class RegisterView(APIView):
     """User registration with email and password"""
