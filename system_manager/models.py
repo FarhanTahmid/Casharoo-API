@@ -35,7 +35,7 @@ class EmailAccounts(models.Model):
 
 class EmailTemplate(models.Model):
     """Model to store email templates"""
-    name = models.CharField(max_length=100, help_text="Template name")
+    name = models.CharField(max_length=100, help_text="Template name (e.g: auth_signup)",unique=True)
     subject = models.CharField(max_length=200, help_text="Email subject")
     body_text = models.TextField(help_text="Plain text email body")
     body_html = models.TextField(blank=True, null=True, help_text="HTML email body")
@@ -66,6 +66,7 @@ class EmailLog(models.Model):
     )
     
     to_emails = models.TextField()  # Store as comma-separated list
+    sender_email = models.EmailField(null=True, blank=True)
     subject = models.CharField(max_length=255)
     purpose = models.CharField(max_length=100, default='default')
     template_name = models.CharField(max_length=255, null=True, blank=True)

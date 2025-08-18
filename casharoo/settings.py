@@ -303,29 +303,155 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
 
 # Logging Configuration
+import logging
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+LOG_DIR = BASE_DIR / "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+
+    'formatters': {
+        'simple': {
+            'format': '[{levelname}] {asctime} {name}: {message}',
+            'style': '{',
+        },
+        'verbose': {
+            'format': '{asctime} {levelname} {name} [{pathname}:{lineno}] {message}',
+            'style': '{',
+        },
+    },
+
+    'filters': {
+        # Exclusive level windows so a record goes to exactly one file
+        'only_debug': {
+            '()': 'casharoo.logging_filter.LevelRangeFilter',
+            'min_level': logging.DEBUG,
+            'max_level': logging.DEBUG,
+        },
+        'only_info': {
+            '()': 'casharoo.logging_filter.LevelRangeFilter',
+            'min_level': logging.INFO,
+            'max_level': logging.INFO,
+        },
+        'only_warning': {
+            '()': 'casharoo.logging_filter.LevelRangeFilter',
+            'min_level': logging.WARNING,
+            'max_level': logging.WARNING,
+        },
+        'error_and_up': {
+            '()': 'casharoo.logging_filter.LevelRangeFilter',
+            'min_level': logging.ERROR,
+            'max_level': logging.CRITICAL,
+        },
+    },
+
     'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
+        # Rotating handlers keep files from growing forever
+        'debug_file': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOG_DIR / 'debug.log'),
+            'maxBytes': 5 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'verbose',
+            'filters': ['only_debug'],
+            'encoding': 'utf-8',
         },
+        'info_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOG_DIR / 'info.log'),
+            'maxBytes': 5 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'verbose',
+            'filters': ['only_info'],
+            'encoding': 'utf-8',
+        },
+        'warning_file': {
+            'level': 'WARNING',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOG_DIR / 'warning.log'),
+            'maxBytes': 5 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'verbose',
+            'filters': ['only_warning'],
+            'encoding': 'utf-8',
+        },
+        'error_file': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOG_DIR / 'error.log'),
+            'maxBytes': 5 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'verbose',
+            'filters': ['error_and_up'],
+            'encoding': 'utf-8',
+        },
+        'security_file': {
+            'level': 'WARNING',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOG_DIR / 'security.log'),
+            'maxBytes': 2 * 1024 * 1024,
+            'backupCount': 3,
+            'formatter': 'simple',
+            'encoding': 'utf-8',
+        },
+        'db_file': {
+            'level': 'WARNING',  # keep at WARNING+ to avoid huge logs
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': str(LOG_DIR / 'db.log'),
+            'maxBytes': 5 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'simple',
+            'encoding': 'utf-8',
+        },
+        # Optional: console during development
         'console': {
-            'level': 'INFO',
             'class': 'logging.StreamHandler',
+            'level': 'INFO',
+            'formatter': 'simple',
         },
     },
-    'root': {
-        'handlers': ['console', 'file'],
-        'level': 'INFO',
-    },
+
     'loggers': {
+        # Django core
         'django': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
+            'handlers': ['error_file', 'warning_file', 'info_file', 'debug_file'],
+            'level': 'DEBUG',          # emit everything; handlers + filters split by level
             'propagate': False,
+        },
+        # 500s, bad requests, etc.
+        'django.request': {
+            'handlers': ['error_file'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        # Security (e.g., SuspiciousOperation)
+        'django.security': {
+            'handlers': ['security_file', 'error_file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        # Database messages
+        'django.db.backends': {
+            'handlers': ['db_file'],
+            'level': 'WARNING',        # set to DEBUG only when profiling locally
+            'propagate': False,
+        },
+        # Your app(s)
+        'myapp': {
+            'handlers': ['error_file', 'warning_file', 'info_file', 'debug_file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        # Root logger for anything else
+        '': {
+            'handlers': ['error_file', 'warning_file', 'info_file', 'debug_file'],
+            'level': 'DEBUG',
         },
     },
 }

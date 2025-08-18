@@ -20,5 +20,5 @@ class EmailLogAdmin(admin.ModelAdmin):
     list_filter = ('status', 'created_at','purpose')
     search_fields = ('to_emails', 'subject', 'status','purpose')
     date_hierarchy = 'created_at'
-    ordering = ('-created_at')
+    ordering = ('-created_at',)
 
