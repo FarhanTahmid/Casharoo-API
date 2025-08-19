@@ -1,8 +1,13 @@
-from django.urls import path
+from django.urls import path,include
 from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
 
 app_name='app_users'
+
+verification_routes=[
+    path('send_verification_code/', views.AccountVerification.as_view({'get': 'send_verification_code'}), name='send_verification_code'),
+
+]
 
 urlpatterns = [
     # Authentication
@@ -12,5 +17,8 @@ urlpatterns = [
     path('auth-status/', views.AuthStatusView.as_view(), name='auth_status'),
     
     path('token-refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
+    
+    # Email Verification
+    path('verification/',include((verification_routes,'verification'),namespace='verification')),
+    
 ]

@@ -1,5 +1,5 @@
-from rest_framework import status, generics, permissions
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework import status, generics, permissions,viewsets
+from rest_framework.decorators import api_view, permission_classes,action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -121,6 +121,19 @@ class LogoutView(APIView):
                 'error': 'Invalid token'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+class AccountVerification(viewsets.ViewSet):
+    '''Verify account of the user by sending verification code via email address'''
+    permission_classes=[permissions.IsAuthenticated]
+    
+    @action(detail=False,methods=['get'])
+    def send_verification_code(self,request):
+        '''Send verification code to user's email address'''
+        user=AppUser.objects.get(id=request.user.id)
+        
+        return Response({
+            'msg':f'{user}'
+        },status=status.HTTP_200_OK)
+    
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])

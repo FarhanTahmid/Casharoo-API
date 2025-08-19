@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en" style="margin:0; padding:0;">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Please verify your email</title>
+    <!-- No JS included: email clients strip scripts. Kept everything in one file with inline CSS only. -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style type="text/css">
+        /* Belt-and-suspenders: some clients keep @import, others prefer <link> */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
+    </style>  
+  </head>
+  <body style="margin:0; padding:0; background:#f5f6f8; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;">
+    <!-- Preheader (hidden) -->
+    <div style="display:none; overflow:hidden; line-height:1px; opacity:0; max-height:0; max-width:0;">
+      Use this code to verify your Casharooo account.
+    </div>
+    <!-- Wrapper -->
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f5f6f8;">
+      <tr>
+        <td align="center" style="padding:24px;">
+          <!-- Card -->
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="max-width:560px; background:#ffffff; border-radius:18px; border:1px solid #e9e9ec;">
+            <tr>
+              <td align="center" style="padding:36px 32px 12px 32px; font-family:'Poppins','Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                <!-- Icon block (simple, email-safe) -->
+                <div style="width:64px; height:64px; background:#ffff; border-radius:12px; margin:0 auto 20px auto;">
+                    <img src="{{ logo_url }}" alt="Casharooo"
+                        width="64" height="64"
+                        style="display:block; width:64px; height:64px; border-radius:12px; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic;">
+                </div>
+
+                <!-- Title -->
+                <h1 style="margin:0 0 10px 0; font-size:24px; line-height:1.25; color:#0b0b0c; font-weight:700;">
+                  Please verify your email 💰
+                </h1>
+
+                <!-- Subtext -->
+                <p style="margin:0; font-size:14px; line-height:22px; color:#4a4f57;">
+                  To use Casharooo and verify your account, please use the below given code.
+                </p>
+                <p style="margin:8px 0 22px 0; font-size:14px; line-height:22px; color:#4a4f57;">
+                  This helps keep your account secure.
+                </p>
+
+                <!-- Verification code pill -->
+                <div style="display:inline-block; background:#2563eb; color:#ffffff; border-radius:10px; padding:12px 22px; letter-spacing:4px; font-weight:800; font-size:18px; font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">
+                  {{ verification_code }}
+                </div>
+
+                <!-- Spacer -->
+                <div style="height:18px; line-height:18px;">&nbsp;</div>
+
+                <!-- Notice -->
+                <p style="margin:0; font-size:13px; line-height:22px; color:#5c616a;">
+                  You're receiving this email because you have registered an account in Casharooo. If you are not
+                  sure why you're receiving this, please contact us by replying to this email.
+                </p>
+
+                <!-- Spacer -->
+                <div style="height:28px; line-height:28px;">&nbsp;</div>
+
+                <!-- Footer pill -->
+                <div style="display:block; background:#f2f3f6; color:#6a6f78; border-radius:10px; padding:14px 16px; font-size:13px; line-height:18px;">
+                  Casharooo. The best finance management application! ✌️
+                </div>
+
+                <!-- Bottom spacer -->
+                <div style="height:16px; line-height:16px;">&nbsp;</div>
+              </td>
+            </tr>
+          </table>
+          <!-- /Card -->
+        </td>
+      </tr>
+    </table>
+    <!-- /Wrapper -->
+  </body>
+</html>

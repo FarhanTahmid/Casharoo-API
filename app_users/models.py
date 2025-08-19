@@ -93,3 +93,18 @@ class AppUser(AbstractBaseUser,PermissionsMixin):
                 counter += 1
             self.username = username
         super().save(*args, **kwargs)
+
+
+class EmailVerification(models.Model):
+    user=models.ForeignKey(AppUser,on_delete=models.CASCADE,null=False,blank=False)
+    verification_code=models.CharField(max_length=6,null=False,blank=False)
+    created_at=models.DateTimeField(auto_now_add=True)
+    expires_at=models.DateTimeField(null=False,blank=False)
+    is_used=models.BooleanField(null=False,blank=False,default=False)
+    
+    def __str__(self):
+        return f"Verification obj for {self.user.id}"
+    @property
+    def is_expired(self):
+        return timezone.now()>self.expires_at
+    
