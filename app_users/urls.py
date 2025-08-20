@@ -6,7 +6,7 @@ app_name='app_users'
 
 verification_routes=[
     path('send_verification_code/', views.AccountVerification.as_view({'get': 'send_verification_code'}), name='send_verification_code'),
-
+    path('verify_account/',views.AccountVerification.as_view({'post':'verify_account'}),name='verify_account'),
 ]
 
 urlpatterns = [

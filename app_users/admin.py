@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
-from .models import AppUser
+from .models import AppUser,EmailVerification
 
 @admin.register(AppUser)
 class UserAdmin(BaseUserAdmin):
@@ -34,3 +34,13 @@ class UserAdmin(BaseUserAdmin):
         if obj:
             return self.readonly_fields + ('provider',)
         return self.readonly_fields
+
+@admin.register(EmailVerification)
+class VerificationCodeAdmin(admin.ModelAdmin):
+    list_display=(
+        'user__email','created_at','expires_at','is_used'
+    )
+    list_filter=('is_used',)
+    search_fields=(
+        'user__email',
+    )

@@ -17,6 +17,7 @@ from .serializers import (
     PasswordResetSerializer, PasswordResetConfirmSerializer,
     UserProfileSerializer, ChangePasswordSerializer
 )
+from .utils import AuthUtils
 
 def get_tokens_for_user(user):
     """Generate JWT tokens for user"""
@@ -128,12 +129,54 @@ class AccountVerification(viewsets.ViewSet):
     @action(detail=False,methods=['get'])
     def send_verification_code(self,request):
         '''Send verification code to user's email address'''
-        user=AppUser.objects.get(id=request.user.id)
-        
-        return Response({
-            'msg':f'{user}'
-        },status=status.HTTP_200_OK)
+        try:
+            user=AppUser.objects.get(id=request.user.id)
+            if user.is_verified:
+                return Response(
+                    {'error':"User is already verified"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            auth_utils=AuthUtils()
+            email_status,message=auth_utils._send_verification_code(user=user)
+            if email_status:
+                return Response({
+                    'message':message
+                },status=status.HTTP_200_OK)
+            else:
+                return Response({
+                    'error':message
+                },status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Exception: {e}")
+            return Response(
+                {'error':"Something went wrong! Please try again later!"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
+    @action(detail=False,methods=['post'])
+    def verify_account(self,request):
+        try:
+            verification_code=request.data.get('verification_code')
+            user=AppUser.objects.get(id=request.user.id)
+            
+            auth_utils=AuthUtils()
+            verification_status,message=auth_utils._verify_user(user=user,verification_code=verification_code)
+            
+            if verification_status:
+                return Response(
+                    {'message':message},
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {'error':message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            return Response(
+                {'error':"Something went wrong!"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])

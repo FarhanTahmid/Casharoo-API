@@ -1,6 +1,7 @@
 import smtplib
 import logging
 import traceback
+from datetime import datetime
 from typing import Optional
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -153,17 +154,6 @@ class EmailHandler:
         if isinstance(to_emails, str):
             to_emails = [to_emails]
         
-        # create email log entry if tracking is enabled
-        email_log = None
-        if track:
-            email_log = EmailLog.objects.create(
-                sender_email = email_account.email_address if email_account else from_email,
-                to_emails=','.join(to_emails),
-                subject=subject,
-                purpose=purpose,
-                template_name=template_name if template_name else '',
-                status='PENDING'
-            )
         # Get the appropriate email account
         email_account = cls.get_email_account(purpose)
         if not email_account:
@@ -175,6 +165,17 @@ class EmailHandler:
                 email_log.save()
             return False, message, email_log.id if email_log else None
 
+        # create email log entry if tracking is enabled
+        email_log = None
+        if track:
+            email_log = EmailLog.objects.create(
+                sender_email = email_account.email_address if email_account else from_email,
+                to_emails=','.join(to_emails),
+                subject=subject,
+                purpose=purpose,
+                template_name=template_name if template_name else '',
+                status='PENDING'
+            )
         # Use template if provided
         try:
             if template_name and context_data:
@@ -272,6 +273,7 @@ class EmailHandler:
             if track and email_log:
                 email_log.sender_email = email_account.email_address
                 email_log.status = 'SENT'
+                email_log.sent_at=datetime.now()
                 email_log.save()
             
             success_msg = f"Email sent successfully to {', '.join(to_emails)}"
