@@ -4,11 +4,6 @@ from . import views
 
 app_name='app_users'
 
-verification_routes=[
-    path('send_verification_code/', views.AccountVerification.as_view({'get': 'send_verification_code'}), name='send_verification_code'),
-    path('verify_account/',views.AccountVerification.as_view({'post':'verify_account'}),name='verify_account'),
-]
-
 urlpatterns = [
     # Authentication
     path('register/', views.RegisterView.as_view(), name='register'),
@@ -19,6 +14,10 @@ urlpatterns = [
     path('token-refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     # Email Verification
-    path('verification/',include((verification_routes,'verification'),namespace='verification')),
+    path('send_verification_code/', views.AccountVerification.as_view({'get': 'send_verification_code'}), name='send_verification_code'),
+    path('verify_account/',views.AccountVerification.as_view({'post':'verify_account'}),name='verify_account'),
+    
+    # Password reset and forgot password
+    
     
 ]

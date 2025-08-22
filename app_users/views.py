@@ -1,3 +1,4 @@
+import logging
 from rest_framework import status, generics, permissions,viewsets
 from rest_framework.decorators import api_view, permission_classes,action
 from rest_framework.response import Response
@@ -33,6 +34,8 @@ class AuthStatusView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [permissions.IsAuthenticated]
     
+    logger=logging.getLogger('app_users.views.AuthStatusView')
+    
     def get(self, request):
         '''Check if the user is authenticated and return user details'''
         try:
@@ -48,46 +51,67 @@ class AuthStatusView(APIView):
                 'error': 'Invalid or expired token',
                 'detail': str(e)
             }, status=status.HTTP_401_UNAUTHORIZED)
+        except Exception as e:
+            self.logger.error(f"Exception occured while checking auth status: {e}",exc_info=True)
+            return Response(
+                {'error':"Something went wrong!"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class RegisterView(APIView):
     """User registration with email and password"""
     permission_classes = [permissions.AllowAny]
+    logger=logging.getLogger('app_users.views.RegisterView')
 
     def post(self, request):
-        serializer = AppUserRegistrationSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            tokens = get_tokens_for_user(user)
+        try:
+            serializer = AppUserRegistrationSerializer(data=request.data)
+            if serializer.is_valid():
+                user = serializer.save()
+                tokens = get_tokens_for_user(user)
+                
+                return Response({
+                    'message': 'User registered successfully',
+                    'user': UserProfileSerializer(user).data,
+                    'tokens': tokens
+                }, status=status.HTTP_201_CREATED)
             
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            self.logger.error(f"Exception occured while registering user: {e}",exc_info=True)
             return Response({
-                'message': 'User registered successfully',
-                'user': UserProfileSerializer(user).data,
-                'tokens': tokens
-            }, status=status.HTTP_201_CREATED)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                'error':"Something went wrong! Please try again later."
+            },status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class LoginView(APIView):
     """User login with email and password"""
     permission_classes = [permissions.AllowAny]
+    logger=logging.getLogger('app_users.views.LoginView')
 
     def post(self, request):
-        serializer = AppUserLoginSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            user = serializer.validated_data['user']
-            tokens = get_tokens_for_user(user)
+        try:
+            serializer = AppUserLoginSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                user = serializer.validated_data['user']
+                tokens = get_tokens_for_user(user)
+                
+                return Response({
+                    'message': 'Login successful',
+                    'user': UserProfileSerializer(user).data,
+                    'tokens': tokens
+                }, status=status.HTTP_200_OK)
             
-            return Response({
-                'message': 'Login successful',
-                'user': UserProfileSerializer(user).data,
-                'tokens': tokens
-            }, status=status.HTTP_200_OK)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            self.logger.error(f"Error occured while login {e}",exc_info=True)
+            return Response(
+                {'error':"Something went wrong! Please try again later."}
+            )
 
 class GoogleAuthView(APIView):
     """Google OAuth authentication"""
     permission_classes = [permissions.AllowAny]
+    logger=logging.getLogger('app_users.views.GoogleAuthView')
 
     def post(self, request):
         serializer = GoogleAuthSerializer(data=request.data)
@@ -106,6 +130,7 @@ class GoogleAuthView(APIView):
 class LogoutView(APIView):
     """Logout user by blacklisting refresh token"""
     permission_classes = [permissions.IsAuthenticated]
+    logger=logging.getLogger('app_users.views.LogoutView')
 
     def post(self, request):
         try:
@@ -118,6 +143,7 @@ class LogoutView(APIView):
                 'message': 'Logout successful'
             }, status=status.HTTP_200_OK)
         except Exception as e:
+            self.logger.error(f"Exception occured while logging out: {e}",exc_info=True)
             return Response({
                 'error': 'Invalid token'
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -125,6 +151,7 @@ class LogoutView(APIView):
 class AccountVerification(viewsets.ViewSet):
     '''Verify account of the user by sending verification code via email address'''
     permission_classes=[permissions.IsAuthenticated]
+    logger=logging.getLogger('app_users.views.AccountVerification')
     
     @action(detail=False,methods=['get'])
     def send_verification_code(self,request):
@@ -147,7 +174,7 @@ class AccountVerification(viewsets.ViewSet):
                     'error':message
                 },status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print(f"Exception: {e}")
+            self.logger.error(f"Error while sending verification code: {e}",exc_info=True)
             return Response(
                 {'error':"Something went wrong! Please try again later!"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -173,11 +200,152 @@ class AccountVerification(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
         except Exception as e:
+            self.logger.error(f"Error while verifying account: {e}",exc_info=True)
             return Response(
                 {'error':"Something went wrong!"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+class ForgotPasswordViewset(viewsets.ViewSet):
+    permission_classes=[permissions.AllowAny]
+    logger=logging.getLogger('app_users.views.ForgotPasswordViewset')
+
+    @action(detail=False,methods=['post'])
+    def send_verification_code(self,request):
+        '''Send verification code to given email'''
+        try:
+            # As emails are unique, search user with this email and send the code to that email
+            get_email=request.data.get('email')
+            
+            # get user with the email
+            try:
+                user=AppUser.objects.get(email=get_email)
+            except AppUser.DoesNotExist:
+                return Response(
+                    {'error':"No account is associated with this email."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if user:
+                auth_utils=AuthUtils()
+                email_status,message=auth_utils._send_verification_code(user=user)
+                if email_status:
+                    return Response({
+                        'message':message
+                    },status=status.HTTP_200_OK)
+                else:
+                    return Response({
+                        'error':message
+                    },status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            self.logger.error(f"Error while sending verification code: {e}",exc_info=True)
+            return Response(
+                {'error':"Can not send email at this time. Please try again later."}
+            )
+    
+    @action(detail=False,methods=['post'])
+    def verify_code(self,request):
+        try:
+            verification_code=request.data.get('verification_code')
+            user=AppUser.objects.get(id=request.user.id)
+            
+            auth_utils=AuthUtils()
+            verification_status,message=auth_utils._verify_user(user=user,verification_code=verification_code)
+            
+            if verification_status:
+                return Response(
+                    {'message':message},
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {'error':message},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            self.logger.error(f"Error while verifying code: {e}",exc_info=True)
+            return Response(
+                {'error':"Something went wrong!"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=False,methods=['post'])
+    def reset_password(self,request):
+        '''Reset the account password with new password'''
+        try:
+            # email will be sent by frontend by a secured way
+            email=request.data.get('email')
+            new_password=request.data.get('password')
+            if email and new_password:
+                # get user by email
+                try:
+                    user=AppUser.objects.get(email=email)
+                except AppUser.DoesNotExist:
+                    return Response(
+                        {'error':"Can not reset password! Please try again later"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+                if user:
+                    # update password
+                    user.set_password(new_password)
+                    user.save()
+                    return Response(
+                        {'error':"Password was updated! Login with new credentials"},
+                        status=status.HTTP_200_OK
+                    )
+            else:
+                return Response(
+                    {'error':"Missing fields!"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            self.logger.error(f"Error while sending resetting password: {e}",exc_info=True)
+            return Response(
+                {'error':"Something went wrong! Please try again later!"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+class ChangePasswordViewset(viewsets.ViewSet):
+    permission_classes=[permissions.IsAuthenticated]
+    logger=logging.getLogger('app_users.views.ChangePasswordViewset')
+
+    @action(detail=False,methods=['post'])
+    def change_password(self,request):
+        try:
+            # change password
+            current_password=request.data.get('current_password')
+            new_password=request.data.get('new_password')
+            
+            if current_password and new_password:
+                if not request.user.check_password(current_password):
+                    return Response(
+                        {'error':"Incorrect current password!"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                if request.user.check_password(new_password):
+                    return Response({
+                        'error': 'New password must be different from current password'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                # update password
+                request.user.set_password(new_password)
+                request.user.save()
+                return Response(
+                    {'message':"Password was changed successfully!"},
+                    status=status.HTTP_200_OK
+                )
+
+            else:
+                return Response(
+                    {'error':"Missing fields!"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Exception as e:
+            self.logger.error(f"Error while changing password: {e}",exc_info=True)
+            return Response(
+                {'error':"Something went wrong. Please try again later!"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def user_detail(request):

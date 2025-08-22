@@ -1,7 +1,65 @@
 from django.db import models
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+import uuid
 
 # Create your models here.
 
+# ##################### System Audit Log ################################################
+
+class CRUDLog(models.Model):
+    """
+    Model to track all Create, Read, Update, Delete operations in the system.
+    This provides a complete audit trail of all data modifications.
+    """
+    ACTION_CHOICES = (
+        ('CREATE', 'Create'),
+        ('READ', 'Read'),
+        ('UPDATE', 'Update'),
+        ('DELETE', 'Delete'),
+    )
+    User=get_user_model()
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='crud_logs')
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    operation=models.TextField(blank=True, null=True, help_text="Optional description for the action")
+    model_name = models.CharField(max_length=1000,null=False,blank=False)
+    record_ids = models.TextField(null=True, blank=True, help_text="ID of the records being modified")
+    changes = models.JSONField(null=True, blank=True, help_text="JSON representation of the changes made")
+    
+    timestamp = models.DateTimeField(auto_now_add=True,editable=False,null=False,blank=False)
+    ip_address = models.GenericIPAddressField(null=False,blank=False,editable=False)
+    user_agent = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        verbose_name = "CRUD Log"
+        verbose_name_plural = "CRUD Logs"
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['action']),
+            models.Index(fields=['model_name']),
+            models.Index(fields=['timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_action_display()} on {self.model_name}:{self.record_ids} by {self.user or 'Anonymous'}"
+
+
+class AuthLog(models.Model):
+    '''Authentication logs for the App users'''
+    pass
+
+
+
+
+
+# ########################################################################################
+
+
+
+# ##################### Email Purpose ###################################################
 class EmailAccounts(models.Model):
     name = models.CharField(max_length=100, help_text="Friendly name for this email account")
     email_address = models.EmailField(max_length=100, help_text="Email address to send from")
@@ -83,3 +141,4 @@ class EmailLog(models.Model):
     
     def __str__(self):
         return f"{self.subject} - {self.status} - {self.created_at}"
+###############################################################################################

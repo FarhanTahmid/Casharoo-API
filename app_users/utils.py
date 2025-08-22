@@ -79,6 +79,6 @@ class AuthUtils:
                 verification_obj.save()
                 return True,"Email verification was successful!"
         except Exception as e:
-            logging.error(f"Error occured while verifying user! {e}")
+            self.logger.error(f"Error occured while verifying user! {e}")
             return False,"Can not verify your account now! Please try again later."
         
