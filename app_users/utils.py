@@ -1,11 +1,14 @@
 import logging
 import random
 import string
+from google.auth.transport import requests
+from google.oauth2 import id_token
+from casharoo import settings
 from django.utils import timezone
 from datetime import timedelta
 from system_manager.models import EmailLog
 from system_manager.utils.email_handler import EmailHandler
-from app_users.models import EmailVerification
+from app_users.models import EmailVerification,AppUser
 
 class AuthUtils:
     logger=logging.getLogger('app_users.utils.AuthUtils')
@@ -81,4 +84,58 @@ class AuthUtils:
         except Exception as e:
             self.logger.error(f"Error occured while verifying user! {e}")
             return False,"Can not verify your account now! Please try again later."
+    
+    def _validate_id_token(self, token, device_type:str):
+        """
+        Verify the Google ID token and extract user information
+        """
+        device_type_list=['ANDROID','IOS','DESKTOP','WEB']
+        try:
+            if not device_type:
+                return False,"Device type must be specified"
+            if device_type.upper() not in device_type_list:
+                return False,f"Device type must be from: {device_type_list}"
+            
+            if device_type.upper()=="ANDROID":
+                audience=settings.ANDROID_OAUTH2_CLIENT_ID
+            
+            # Verify the token with Google
+            id_info = id_token.verify_oauth2_token(
+                token, 
+                requests.Request(), 
+                audience
+            )
+            
+            # Check if token is issued by Google
+            if id_info['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
+                return False,'Invalid token issuer'
+                
+            return id_info
+            
+        except ValueError as e:
+            return False,f'Invalid token: {str(e)}'
         
+    
+    def _create_user_with_google(self,validated_data):
+        user_data = validated_data['user_data']
+        email = user_data.get('email')
+        
+        if not email:
+            return False,"Email not provided by Google"
+        
+        # check if the user is already registered
+        
+        try:
+            user=AppUser.objects.get(email=email)
+            return False,"Account with this email already exists!"
+        except AppUser.DoesNotExist:
+            # Create new user
+            user=AppUser.objects.create_user(
+                email=email,
+                first_name=user_data.get('given_name', ''),
+                last_name=user_data.get('family_name', ''),
+                provider='google',
+                provider_id=user_data.get('id'),
+                is_verified=True
+            )
+        return user

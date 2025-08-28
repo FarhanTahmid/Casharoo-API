@@ -455,3 +455,8 @@ LOGGING = {
         },
     },
 }
+
+#OAUTH2 SETUP
+
+# ANDROID
+ANDROID_OAUTH2_CLIENT_ID=os.environ.get('ANDROID_OAUTH2_CLIENT_ID')
