@@ -345,7 +345,88 @@ class ChangePasswordViewset(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+class GoogleAuth(viewsets.ViewSet):
+    permission_classes = [permissions.AllowAny]
     
+    @action(detail=False, methods=['post'])
+    def google_auth(self, request):
+        """
+        Authenticate user with Google OAuth
+        
+        Expected payload:
+        {
+            "id_token": "google_id_token_here",
+            "device_type": "device type here" # e.g: "ANDROID","IOS","DESKTOP","WEBAPP"
+        }
+        """
+        # Get id_token and device_type from payload
+        id_token = request.data.get('id_token')
+        device_type = request.data.get('device_type')
+        
+        if not id_token or not device_type:
+            return Response(
+                {
+                    'success': False,
+                    'error': "Both id_token and device_type are required."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        auth_utils = AuthUtils()
+        
+        # Step 1: Validate the Google ID token
+        id_info, message = auth_utils._validate_id_token(
+            token=id_token, 
+            device_type=device_type
+        )
+        
+        if id_info is None:
+            return Response(
+                {
+                    'success': False,
+                    'error': message
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Step 2: Create or get user with Google data
+        user, user_message = auth_utils._create_or_get_user_with_google(id_info)
+        
+        if user is None:
+            return Response(
+                {
+                    'success': False,
+                    'error': user_message
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Step 3: Generate JWT tokens
+        tokens = auth_utils._generate_tokens(user)
+        
+        if tokens is None:
+            return Response(
+                {
+                    'success': False,
+                    'error': "Failed to generate authentication tokens"
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # Step 4: Get user data for response
+        user_data = auth_utils._get_user_data(user)
+        
+        # Step 5: Return success response
+        return Response(
+            {
+                'success': True,
+                'message': 'Authentication successful',
+                'user': user_data,
+                'tokens': tokens
+            },
+            status=status.HTTP_200_OK
+        )        
+
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def user_detail(request):

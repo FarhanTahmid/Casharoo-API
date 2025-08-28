@@ -5,6 +5,7 @@ from google.auth.transport import requests
 from google.oauth2 import id_token
 from casharoo import settings
 from django.utils import timezone
+from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import timedelta
 from system_manager.models import EmailLog
 from system_manager.utils.email_handler import EmailHandler
@@ -85,57 +86,116 @@ class AuthUtils:
             self.logger.error(f"Error occured while verifying user! {e}")
             return False,"Can not verify your account now! Please try again later."
     
-    def _validate_id_token(self, token, device_type:str):
+    # Google Auth Utils
+    
+    def _validate_id_token(self, token, device_type: str):
         """
         Verify the Google ID token and extract user information
         """
-        device_type_list=['ANDROID','IOS','DESKTOP','WEB']
+        device_type_list = ['ANDROID', 'IOS', 'DESKTOP', 'WEBAPP']
         try:
             if not device_type:
-                return False,"Device type must be specified"
+                return None, "Device type must be specified"
             if device_type.upper() not in device_type_list:
-                return False,f"Device type must be from: {device_type_list}"
+                return None, f"Device type must be from: {device_type_list}"
             
-            if device_type.upper()=="ANDROID":
-                audience=settings.ANDROID_OAUTH2_CLIENT_ID
+            if device_type.upper() == "ANDROID":
+                audience = settings.ANDROID_OAUTH2_CLIENT_ID
+            else:
+                audience = None
             
+            if audience is None:
+                return None, f"Audience not configured for device type: {device_type}"
+                
             # Verify the token with Google
-            id_info = id_token.verify_oauth2_token(
-                token, 
-                requests.Request(), 
-                audience
-            )
+            try:
+                id_info = id_token.verify_oauth2_token(
+                    token, 
+                    requests.Request(), 
+                    audience
+                )
+            except Exception as e:
+                return None, f"Cannot validate id token: {str(e)}"
             
             # Check if token is issued by Google
             if id_info['iss'] not in ['accounts.google.com', 'https://accounts.google.com']:
-                return False,'Invalid token issuer'
+                return None, 'Invalid token issuer'
                 
-            return id_info
+            return id_info, "Validated id token!"
             
         except ValueError as e:
-            return False,f'Invalid token: {str(e)}'
-        
+            return None, f'Invalid token: {str(e)}'
     
-    def _create_user_with_google(self,validated_data):
-        user_data = validated_data['user_data']
+    def _create_or_get_user_with_google(self, user_data):
+        """
+        Create or get user from Google OAuth data
+        Similar to serializer logic but in utility function
+        """
         email = user_data.get('email')
+        google_id = user_data.get('sub')  # Google uses 'sub' for user ID
+        first_name = user_data.get('given_name', '')
+        last_name = user_data.get('family_name', '')
         
         if not email:
-            return False,"Email not provided by Google"
+            return None, "Email not provided by Google"
         
-        # check if the user is already registered
-        
+        # Try to find existing user by email
         try:
-            user=AppUser.objects.get(email=email)
-            return False,"Account with this email already exists!"
+            user = AppUser.objects.get(email=email)
+            
+            # Donot login if user exists with same email but wasn't created via Google
+            if user.provider != 'google':          
+                return None, "An account is already registered with this email!"
+            else:
+                return user,"User found!"            
         except AppUser.DoesNotExist:
             # Create new user
-            user=AppUser.objects.create_user(
-                email=email,
-                first_name=user_data.get('given_name', ''),
-                last_name=user_data.get('family_name', ''),
-                provider='google',
-                provider_id=user_data.get('id'),
-                is_verified=True
-            )
-        return user
+            try:
+                user = AppUser.objects.create_user(
+                    email=email,
+                    first_name=first_name,
+                    last_name=last_name,
+                    provider='google',
+                    provider_id=google_id,
+                    is_verified=True  # Google accounts are pre-verified
+                )
+                return user, "New user created"
+                
+            except Exception as e:
+                return None, f"Failed to create user: {str(e)}"
+    
+    def _generate_tokens(self, user):
+        """
+        Generate JWT tokens for user
+        """
+        try:
+            refresh = RefreshToken.for_user(user)
+            access_token = refresh.access_token
+            
+            # Update last login
+            user.last_login = timezone.now()
+            user.save(update_fields=['last_login'])
+            
+            return {
+                'access': str(access_token),
+                'refresh': str(refresh),
+            }
+        except Exception as e:
+            return None
+    
+    def _get_user_data(self, user):
+        """
+        Get user data for response
+        """
+        return {
+            'id': str(user.id),
+            'email': user.email,
+            'username': user.username,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'full_name': user.full_name,
+            'is_verified': user.is_verified,
+            'provider': user.provider,
+            'profile_picture': user.profile_picture.url if user.profile_picture else None,
+            'date_joined': user.date_joined.isoformat(),
+        }

@@ -14,10 +14,19 @@ urlpatterns = [
     path('token-refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     # Email Verification
-    path('send_verification_code/', views.AccountVerification.as_view({'get': 'send_verification_code'}), name='send_verification_code'),
-    path('verify_account/',views.AccountVerification.as_view({'post':'verify_account'}),name='verify_account'),
+    path('send-verification_code/', views.AccountVerification.as_view({'get': 'send_verification_code'}), name='send_verification_code'),
+    path('verify-account/',views.AccountVerification.as_view({'post':'verify_account'}),name='verify_account'),
     
-    # Password reset and forgot password
+    # Password Change
+    path('change-password/',views.AccountVerification.as_view({'post':'change_password'}),name='change_password'),
+    
+    # Forgot password
+    path('forgot-password/send-verification-code/',views.ForgotPasswordViewset.as_view({'post':'send_verification_code'}),name='send_verification_code'),
+    path('forgot-password/verify-code/',views.ForgotPasswordViewset.as_view({'post':'verify_code'}),name='verify_code'),
+    path('forgot-password/reset-password/',views.ForgotPasswordViewset.as_view({'post':'reset_password'}),name='reset_password'),    
+    
+    # Google auth
+    path('google-auth/',views.AccountVerification.as_view({'post':'google_auth'}),name='google_auth'),
     
     
 ]
