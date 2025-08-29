@@ -177,6 +177,8 @@ class AccountVerification(viewsets.ViewSet):
             verification_status,message=auth_utils._verify_user(user=user,verification_code=verification_code)
             
             if verification_status:
+                user.is_verified=True
+                user.save()
                 return Response(
                     {'message':message},
                     status=status.HTTP_200_OK
@@ -256,6 +258,8 @@ class ForgotPasswordViewset(viewsets.ViewSet):
             verification_status,message=auth_utils._verify_user(user=user,verification_code=verification_code)
             
             if verification_status:
+                user.is_verified=True
+                user.save()
                 return Response(
                     {'message':message},
                     status=status.HTTP_200_OK
@@ -293,7 +297,7 @@ class ForgotPasswordViewset(viewsets.ViewSet):
                     user.set_password(new_password)
                     user.save()
                     return Response(
-                        {'error':"Password was updated! Login with new credentials"},
+                        {'message':"Password was updated! Login with new credentials"},
                         status=status.HTTP_200_OK
                     )
             else:
