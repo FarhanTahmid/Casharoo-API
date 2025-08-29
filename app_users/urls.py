@@ -26,7 +26,7 @@ urlpatterns = [
     path('forgot-password/reset-password/',views.ForgotPasswordViewset.as_view({'post':'reset_password'}),name='reset_password'),    
     
     # Google auth
-    path('google-auth/',views.AccountVerification.as_view({'post':'google_auth'}),name='google_auth'),
+    path('google-auth/',views.GoogleAuth.as_view({'post':'google_auth'}),name='google_auth'),
     
     
 ]

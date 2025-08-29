@@ -8,13 +8,14 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 
 from django.contrib.auth.tokens import default_token_generator
+from django.utils import timezone
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.conf import settings
 from django.template.loader import render_to_string
-from .models import AppUser
+from .models import AppUser,EmailVerification
 from .serializers import (
-    AppUserRegistrationSerializer, AppUserLoginSerializer, GoogleAuthSerializer,
+    AppUserRegistrationSerializer, AppUserLoginSerializer,
     PasswordResetSerializer, PasswordResetConfirmSerializer,
     UserProfileSerializer, ChangePasswordSerializer
 )
@@ -108,25 +109,6 @@ class LoginView(APIView):
                 {'error':"Something went wrong! Please try again later."}
             )
 
-class GoogleAuthView(APIView):
-    """Google OAuth authentication"""
-    permission_classes = [permissions.AllowAny]
-    logger=logging.getLogger('app_users.views.GoogleAuthView')
-
-    def post(self, request):
-        serializer = GoogleAuthSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
-            tokens = get_tokens_for_user(user)
-            
-            return Response({
-                'message': 'Google authentication successful',
-                'user': UserProfileSerializer(user).data,
-                'tokens': tokens
-            }, status=status.HTTP_200_OK)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 class LogoutView(APIView):
     """Logout user by blacklisting refresh token"""
     permission_classes = [permissions.IsAuthenticated]
@@ -163,6 +145,11 @@ class AccountVerification(viewsets.ViewSet):
                     {'error':"User is already verified"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+            previous_unused_codes=EmailVerification.objects.filter(user=user,is_used=False)
+            if previous_unused_codes:
+                for codes in previous_unused_codes:
+                    codes.expires_at=timezone.now()
+                    codes.save()
             auth_utils=AuthUtils()
             email_status,message=auth_utils._send_verification_code(user=user)
             if email_status:
@@ -227,6 +214,11 @@ class ForgotPasswordViewset(viewsets.ViewSet):
                 )
             if user:
                 auth_utils=AuthUtils()
+                previous_unused_codes=EmailVerification.objects.filter(user=user,is_used=False)
+                if previous_unused_codes:
+                    for codes in previous_unused_codes:
+                        codes.expires_at=timezone.now()
+                        codes.save()
                 email_status,message=auth_utils._send_verification_code(user=user)
                 if email_status:
                     return Response({
@@ -239,15 +231,27 @@ class ForgotPasswordViewset(viewsets.ViewSet):
         except Exception as e:
             self.logger.error(f"Error while sending verification code: {e}",exc_info=True)
             return Response(
-                {'error':"Can not send email at this time. Please try again later."}
+                {'error':"Can not send email at this time. Please try again later."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
     @action(detail=False,methods=['post'])
     def verify_code(self,request):
         try:
             verification_code=request.data.get('verification_code')
-            user=AppUser.objects.get(id=request.user.id)
+            email=request.data.get('email')
             
+            if not verification_code or not email:
+                return Response(
+                    {'error':"verification_code and email is required!"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            try:
+                user=AppUser.objects.get(email=email)
+            except AppUser.DoesNotExist:
+                return Response(
+                    {'error':"No user found with this email address"}
+                )
             auth_utils=AuthUtils()
             verification_status,message=auth_utils._verify_user(user=user,verification_code=verification_code)
             
