@@ -276,7 +276,7 @@ class EmailHandler:
                 email_log.sent_at=datetime.now()
                 email_log.save()
             
-            success_msg = f"Email sent successfully to {', '.join(to_emails)}"
+            success_msg = f"Email sent successfully"
             logger.info(success_msg, extra={"to_emails": to_emails, "subject": subject})
             return True, success_msg, email_log.id if email_log else None
 

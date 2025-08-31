@@ -14,7 +14,7 @@ urlpatterns = [
     path('token-refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     
     # Email Verification
-    path('send-verification_code/', views.AccountVerification.as_view({'get': 'send_verification_code'}), name='send_verification_code'),
+    path('send-verification-code/', views.AccountVerification.as_view({'get': 'send_verification_code'}), name='send_verification_code'),
     path('verify-account/',views.AccountVerification.as_view({'post':'verify_account'}),name='verify_account'),
     
     # Password Change
