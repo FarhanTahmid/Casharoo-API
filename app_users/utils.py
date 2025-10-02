@@ -1,10 +1,12 @@
 import logging
 import random
 import string
-from google.auth.transport import requests
+import requests
+from google.auth.transport import requests as http_requests
 from google.oauth2 import id_token
 from casharoo import settings
 from django.utils import timezone
+from django.core.files.base import ContentFile
 from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import timedelta
 from system_manager.models import EmailLog
@@ -111,7 +113,7 @@ class AuthUtils:
             try:
                 id_info = id_token.verify_oauth2_token(
                     token, 
-                    requests.Request(), 
+                    http_requests.Request(), 
                     audience
                 )
             except Exception as e:
@@ -135,6 +137,8 @@ class AuthUtils:
         google_id = user_data.get('sub')  # Google uses 'sub' for user ID
         first_name = user_data.get('given_name', '')
         last_name = user_data.get('family_name', '')
+        picture_url = user_data.get('picture', '')
+
         
         if not email:
             return None, "Email not provided by Google"
@@ -147,6 +151,8 @@ class AuthUtils:
             if user.provider != 'google':          
                 return None, "An account is already registered with this email!"
             else:
+                if picture_url and not user.profile_picture:
+                    self.save_profile_picture_from_google(user,picture_url)
                 return user,"User found!"            
         except AppUser.DoesNotExist:
             # Create new user
@@ -159,6 +165,8 @@ class AuthUtils:
                     provider_id=google_id,
                     is_verified=True  # Google accounts are pre-verified
                 )
+                if picture_url:
+                    self.save_profile_picture_from_google(user,picture_url) 
                 return user, "New user created"
                 
             except Exception as e:
@@ -197,5 +205,25 @@ class AuthUtils:
             'is_verified': user.is_verified,
             'provider': user.provider,
             'profile_picture': user.profile_picture.url if user.profile_picture else None,
-            'date_joined': user.date_joined.isoformat(),
+            'date_joined': user.date_joined,
         }
+    
+    def save_profile_picture_from_google(self,user,picture_url):
+        """
+        Download and save profile picture from URL
+        """
+        try:
+            response = requests.get(picture_url, timeout=10)
+            if response.status_code == 200:
+                # Extract filename from URL or create a default one
+                filename = f"{user.email}_google_profile.jpg"
+                
+                # Save the image to the ImageField
+                user.profile_picture.save(
+                    filename,
+                    ContentFile(response.content),
+                    save=True
+                )
+        except Exception as e:
+            # Log the error but don't fail the user creation
+            print(f"Failed to save profile picture: {str(e)}")

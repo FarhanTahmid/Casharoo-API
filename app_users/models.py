@@ -39,8 +39,8 @@ class AppUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
-def get_profile_picture_save_path(user_id):
-    return f"user_files/{user_id}/"
+def get_profile_picture_save_path(instance, filename):
+    return f"user_files/{instance.id}/{filename}"
 
 class AppUser(AbstractBaseUser,PermissionsMixin):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

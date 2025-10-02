@@ -387,7 +387,6 @@ class GoogleAuth(viewsets.ViewSet):
             token=id_token, 
             device_type=device_type
         )
-        
         if id_info is None:
             return Response(
                 {
