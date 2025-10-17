@@ -107,4 +107,16 @@ class EmailVerification(models.Model):
     @property
     def is_expired(self):
         return timezone.now()>self.expires_at
+
+class UserSettings(models.Model):
+    user = models.OneToOneField(AppUser, on_delete=models.CASCADE, related_name='settings')
     
+    get_auto_reports=models.BooleanField(default=False)
+    is_personal_profile=models.BooleanField(default=True)
+    
+    class Meta:
+        verbose_name = 'User Setting'
+        verbose_name_plural = 'User Settings'
+    
+    def __str__(self):
+        return f"Settings for {self.user.username}"
