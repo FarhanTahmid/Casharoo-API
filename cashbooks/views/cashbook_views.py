@@ -13,8 +13,9 @@ from ..serializers import (
     CashBookAdditionalMemberSerializer
 )
 from ..permissions import IsCashBookOwnerOrMember, IsCashBookOwner
+from system_manager.utils.audit_utils import AuditLogMixin
 
-class CashBookViewSet(viewsets.ModelViewSet):
+class CashBookViewSet(viewsets.ModelViewSet,AuditLogMixin):
     """
     ViewSet for CashBook CRUD operations
     """
@@ -46,7 +47,15 @@ class CashBookViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
     
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        instance=serializer.save(owner=self.request.user)
+        self.log_action(
+            request=self.request,
+            action='CREATE',
+            model_name='CashBook',
+            record_ids=instance.id,
+            changes=serializer.data,
+            operation='Created new cashbook'
+        )            
     
     @action(detail=True, methods=['get'])
     def balance(self, request, pk=None):

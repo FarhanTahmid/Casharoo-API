@@ -8,7 +8,7 @@ from .models import (
 
 @admin.register(CashBook)
 class CashBookAdmin(admin.ModelAdmin):
-    list_display = ['book_name', 'owner', 'get_balance_display', 'created_at', 'last_edited_at']
+    list_display = ['id','book_name', 'owner', 'get_balance_display', 'created_at', 'last_edited_at']
     list_filter = ['created_at', 'last_edited_at']
     search_fields = ['book_name', 'owner__email', 'owner__username']
     readonly_fields = ['id', 'created_at', 'last_edited_at', 'get_balance_display']
@@ -28,12 +28,19 @@ class CashBookAdmin(admin.ModelAdmin):
     
     def get_balance_display(self, obj):
         balance = obj.get_balance()
-        color = 'green' if balance >= 0 else 'red'
+        balance_float = float(balance)
+        color = 'green' if balance_float >= 0 else 'red'
+
+        # Format balance first, then use format_html safely
+        formatted_balance = f"{balance_float:.2f}"
         return format_html(
-            '<span style="color: {}; font-weight: bold;">{:.2f}</span>',
-            color, balance
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            formatted_balance
         )
+
     get_balance_display.short_description = 'Current Balance'
+
 
 
 @admin.register(CashBookAdditionalMember)

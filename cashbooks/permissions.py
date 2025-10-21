@@ -11,7 +11,7 @@ class IsCashBookOwnerOrMember(permissions.BasePermission):
         # Get the cashbook object
         if hasattr(obj, 'cashbook'):
             cashbook = obj.cashbook
-        elif isinstance(obj.__class__.__name__, 'CashBook'):
+        elif obj.__class__.__name__ == 'CashBook':
             cashbook = obj
         else:
             return False
