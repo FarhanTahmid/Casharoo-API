@@ -186,9 +186,12 @@ class CashBookDetailSerializer(serializers.ModelSerializer):
 
 
 class CashBookCreateUpdateSerializer(serializers.ModelSerializer):
+    
+    balance = serializers.SerializerMethodField()
+
     class Meta:
         model = CashBook
-        fields = ['id', 'book_name', 'description']
+        fields = ['id', 'book_name', 'description','created_at','last_edited_at','balance']
         read_only_fields = ['id']
     
     def create(self, validated_data):
@@ -212,3 +215,5 @@ class CashBookCreateUpdateSerializer(serializers.ModelSerializer):
                 )
         
         return cashbook
+    def get_balance(self, obj):
+        return float(obj.get_balance())

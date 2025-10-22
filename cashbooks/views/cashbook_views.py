@@ -57,6 +57,44 @@ class CashBookViewSet(viewsets.ModelViewSet,AuditLogMixin):
             operation='Created new cashbook'
         )            
     
+    @action(detail=False, methods=['delete'], url_path="bulk-delete")
+    def bulk_delete(self, request):
+        """Bulk delete cashbooks"""
+        uuid_list = request.data.get('ids', [])
+        
+        if not uuid_list:
+            return Response(
+                {'error': 'No IDs provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get cashbooks that user owns (users can only delete their own cashbooks)
+        cashbooks = CashBook.objects.filter(
+            id__in=uuid_list,
+            owner=request.user
+        )
+        
+        if not cashbooks.exists():
+            return Response(
+                {'error': 'No cashbooks found or you do not have permission'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        deleted_count = cashbooks.count()
+        deleted_ids = list(cashbooks.values_list('id', flat=True))
+        
+        # Delete the cashbooks
+        cashbooks.delete()
+        
+        return Response(
+            {
+                'message': f'{deleted_count} cashbook(s) deleted successfully',
+                'deleted_ids': deleted_ids,
+                'deleted_count': deleted_count
+            },
+            status=status.HTTP_200_OK
+        )
+    
     @action(detail=True, methods=['get'])
     def balance(self, request, pk=None):
         """Get current balance of cashbook"""
