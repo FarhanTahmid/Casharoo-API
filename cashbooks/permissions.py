@@ -1,7 +1,71 @@
 from rest_framework import permissions
 from cashbooks.models import CashBook
 
+class CashBookAccessPermission(permissions.BasePermission):
+    """
+    Custom permission to check if user has access to a cashbook.
+    - Owner has full access
+    - Members have access based on their role (viewer, editor, admin)
+    """
+    
+    def has_permission(self, request, view):
+        # User must be authenticated
+        return request.user and request.user.is_authenticated
+    
+    def has_object_permission(self, request, view, obj):
+        # Get the cashbook from the object
+        if hasattr(obj, 'cashbook'):
+            cashbook = obj.cashbook
+        else:
+            cashbook = obj
+        
+        # Safe methods (GET, HEAD, OPTIONS) require view permission
+        if request.method in permissions.SAFE_METHODS:
+            return cashbook.has_permission(request.user, 'view')
+        
+        # Write methods require edit permission
+        if request.method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+            return cashbook.has_permission(request.user, 'edit')
+        
+        return False
 
+class CashBookAdminPermission(permissions.BasePermission):
+    """
+    Permission for admin-only actions like managing categories, payment methods, and members.
+    - Owner has full access
+    - Admin members have access
+    """
+    
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated
+    
+    def has_object_permission(self, request, view, obj):
+        # Get the cashbook from the object
+        if hasattr(obj, 'cashbook'):
+            cashbook = obj.cashbook
+        else:
+            cashbook = obj
+        
+        # Check if user is owner or admin
+        return cashbook.owner == request.user or cashbook.has_permission(request.user, 'admin')
+
+
+class CashBookOwnerPermission(permissions.BasePermission):
+    """
+    Permission for owner-only actions.
+    """
+    
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated
+    
+    def has_object_permission(self, request, view, obj):
+        # Get the cashbook from the object
+        if hasattr(obj, 'cashbook'):
+            cashbook = obj.cashbook
+        else:
+            cashbook = obj
+        
+        return cashbook.owner == request.user
 class IsCashBookOwnerOrMember(permissions.BasePermission):
     """
     Permission to check if user is cashbook owner or has appropriate member role
