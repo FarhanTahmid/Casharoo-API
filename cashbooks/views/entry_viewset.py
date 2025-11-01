@@ -1,25 +1,18 @@
-from rest_framework import viewsets,status,filters
+from rest_framework import viewsets,status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 from django.shortcuts import get_object_or_404
-from django.db.models import Q,Sum
-from django.db import transaction
-from django.core.exceptions import ValidationError
 
 from ..models import (
-    CashBook, Entry, EntryCategory, PaymentMethod, 
-    EntryBills, EntryExtraFields
+    CashBook, Entry, EntryBills, EntryExtraFields
 )
 from ..permissions import *
 from ..serializers import (
     EntryListSerializer, EntryDetailSerializer, EntryCreateUpdateSerializer,
-    EntryBillsSerializer, EntryExtraFieldsSerializer,
-    EntryCategorySerializer, PaymentMethodSerializer
+    EntryBillsSerializer, EntryExtraFieldsSerializer
 )
-from system_manager.utils.audit_utils import AuditLogMixin
 
 class EntryViewSet(viewsets.ModelViewSet):
     """

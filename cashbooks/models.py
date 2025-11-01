@@ -91,6 +91,9 @@ class EntryCategory(models.Model):
     
     created_at = models.DateTimeField(null=False, blank=False, auto_now_add=True)
     
+    is_deleted=models.BooleanField(default=False)
+    deleted_at=models.DateTimeField(null=True,blank=True)
+    
     class Meta:
         verbose_name = "Entry Category"
         verbose_name_plural = "Entry Categories"
@@ -98,6 +101,7 @@ class EntryCategory(models.Model):
         indexes = [
             models.Index(fields=["cashbook", "category_name"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["is_deleted"]),
         ]
         ordering = ['category_name']
     
@@ -118,6 +122,9 @@ class PaymentMethod(models.Model):
     
     created_at = models.DateTimeField(null=False, blank=False, auto_now_add=True)
     
+    is_deleted=models.BooleanField(default=False)
+    deleted_at=models.DateTimeField(null=True,blank=True)
+    
     class Meta:
         verbose_name = "Payment Method"
         verbose_name_plural = "Payment Methods"
@@ -125,6 +132,8 @@ class PaymentMethod(models.Model):
         indexes = [
             models.Index(fields=["cashbook", "payment_method_name"]),
             models.Index(fields=["created_at"]),
+            models.Index(fields=["is_deleted"]),
+
         ]
         ordering = ['payment_method_name']
     
