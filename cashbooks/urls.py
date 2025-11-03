@@ -8,17 +8,14 @@ from .views.payment_method_viewset import PaymentMethodViewSet
 from .views.cashbook_stats_viewset import CashBookStatsViewSet
 
 # Main router for cashbook-level resources
-# Assuming you have a CashBookViewSet in your main app
 router = routers.DefaultRouter()
 router.register(r'cashbooks', CashBookHomeViewSet, basename='cashbook')
 
-# Nested router for entries under a cashbook
+# Register nested routers under the MAIN router (not a separate cashbook_router)
 # URL pattern: /cashbooks/{cashbook_pk}/entries/
-cashbook_router = routers.DefaultRouter()
 
-# Register nested routers under cashbook
 entries_router = routers.NestedDefaultRouter(
-    cashbook_router, 
+    router,  # ✅ Use 'router' instead of 'cashbook_router'
     r'cashbooks', 
     lookup='cashbook'
 )
@@ -30,7 +27,7 @@ entries_router.register(
 
 # Categories router under cashbook
 categories_router = routers.NestedDefaultRouter(
-    cashbook_router,
+    router,  # ✅ Use 'router' instead of 'cashbook_router'
     r'cashbooks',
     lookup='cashbook'
 )
@@ -42,7 +39,7 @@ categories_router.register(
 
 # Payment methods router under cashbook
 payment_methods_router = routers.NestedDefaultRouter(
-    cashbook_router,
+    router,  # ✅ Use 'router' instead of 'cashbook_router'
     r'cashbooks',
     lookup='cashbook'
 )
@@ -54,7 +51,7 @@ payment_methods_router.register(
 
 # Stats router under cashbook
 stats_router = routers.NestedDefaultRouter(
-    cashbook_router,
+    router,  # ✅ Use 'router' instead of 'cashbook_router'
     r'cashbooks',
     lookup='cashbook'
 )
@@ -66,6 +63,9 @@ stats_router.register(
 
 # URL patterns
 urlpatterns = [
+    # Include main router (for /cashbooks/)
+    path('', include(router.urls)),
+    
     # Include nested routers
     path('', include(entries_router.urls)),
     path('', include(categories_router.urls)),
