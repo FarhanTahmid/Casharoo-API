@@ -1,0 +1,18 @@
+# Direct dependencies. requirements.txt is the full pinned lock generated from this file:
+#   pip install -r requirements.in && pip freeze > requirements.txt
+Django==5.2.4
+djangorestframework==3.16.0
+djangorestframework_simplejwt==5.5.1
+drf-nested-routers==0.95.0
+django-cors-headers==4.7.0
+django-allauth==65.10.0
+django-countries==7.6.1
+django-resized==1.0.3
+pillow==11.3.0
+psycopg2-binary==2.9.10
+google-auth==2.40.3
+requests==2.32.4
+python-decouple==3.8
+python-dotenv==1.1.1
+reportlab==4.4.4
+openpyxl==3.1.5
