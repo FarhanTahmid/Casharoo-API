@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: casharoo
+          POSTGRES_PASSWORD: casharoo
+          POSTGRES_DB: casharoo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U casharoo"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PROJECT_ENVIRONMENT: test
+      SECRET_KEY: ci-only-not-a-secret
+      TEST_DATABASE_HOST: localhost
+      TEST_DATABASE_PORT: "5432"
+      TEST_DATABASE_NAME: casharoo
+      TEST_DATABASE_USER: casharoo
+      TEST_DATABASE_PASSWORD: casharoo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: System check
+        run: python manage.py check
+      - name: Models and migrations agree
+        run: python manage.py makemigrations --check --dry-run
+      - name: Tests (includes cross-tenant and row-level-security tests)
+        run: python manage.py test --noinput
+      - name: OpenAPI schema
+        run: python manage.py spectacular --file openapi.yml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openapi-schema
+          path: openapi.yml
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit
+      - run: pip-audit -r requirements.txt
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t casharoo-api .

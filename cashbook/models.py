@@ -1,0 +1,297 @@
+import pghistory
+from django.conf import settings
+from django.db import models
+from django.core.validators import FileExtensionValidator
+from django.db.models import Q, Sum
+
+from workspaces.models import AliveManager, Membership, WorkspaceOwnedModel
+
+
+class CashBookQuerySet(models.QuerySet):
+    def accessible_to(self, user):
+        """
+        Cashbooks the user may at least view: every book of a workspace where
+        they are owner, admin or viewer, plus books granted to them individually.
+        """
+        return self.filter(workspace__deleted_at__isnull=True).filter(
+            Q(
+                workspace__memberships__user=user,
+                workspace__memberships__deleted_at__isnull=True,
+                workspace__memberships__role__in=[
+                    Membership.ROLE_OWNER, Membership.ROLE_ADMIN, Membership.ROLE_VIEWER
+                ],
+            )
+            | Q(
+                cashbookadditionalmember__member=user,
+                cashbookadditionalmember__deleted_at__isnull=True,
+            )
+        ).distinct()
+
+
+class CashBookManager(AliveManager.from_queryset(CashBookQuerySet)):
+    pass
+
+
+@pghistory.track()
+class CashBook(WorkspaceOwnedModel):
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='cashbooks_created'
+    )
+
+    book_name = models.CharField(null=False, blank=False, max_length=100)
+    description = models.TextField(null=True, blank=True)
+    # One currency per book; every entry in the book carries the same code
+    currency = models.CharField(max_length=3, default='BDT')
+
+    objects = CashBookManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        verbose_name = 'Cash Book'
+        verbose_name_plural = 'Cash Books'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['workspace', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.book_name} - {self.workspace.name}"
+
+    @property
+    def owner(self):
+        return self.workspace.owner
+
+    def get_totals(self, entries=None):
+        """Return (cash_in, cash_out) in minor units"""
+        if entries is None:
+            entries = self.entry_set.all()
+        totals = entries.aggregate(
+            cash_in=Sum('amount_minor', filter=Q(entry_type='cash_in')),
+            cash_out=Sum('amount_minor', filter=Q(entry_type='cash_out')),
+        )
+        return totals['cash_in'] or 0, totals['cash_out'] or 0
+
+    def get_balance(self):
+        """Calculate current balance in minor units"""
+        cash_in, cash_out = self.get_totals()
+        return cash_in - cash_out
+
+    def has_permission(self, user, permission_type='view'):
+        """Check if user has permission for this cashbook"""
+        workspace_role = self.workspace.role_of(user)
+        if workspace_role in Membership.MANAGER_ROLES:
+            return True
+        if workspace_role == Membership.ROLE_VIEWER and permission_type == 'view':
+            return True
+
+        member = self.cashbookadditionalmember_set.filter(member=user).first()
+        if not member:
+            return False
+
+        if permission_type == 'view':
+            return True
+        elif permission_type == 'edit':
+            return member.role in ['editor', 'admin']
+        elif permission_type == 'admin':
+            return member.role == 'admin'
+
+        return False
+
+
+@pghistory.track()
+class CashBookAdditionalMember(WorkspaceOwnedModel):
+    """Per-book grant for workspace staff."""
+    ROLE_CHOICES = [
+        ('viewer', 'Viewer'),
+        ('editor', 'Editor'),
+        ('admin', 'Admin'),
+    ]
+
+    cashbook = models.ForeignKey(CashBook, on_delete=models.CASCADE, null=False)
+    member = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=False, blank=False)
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='viewer')
+
+    added_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='members_added')
+
+    class Meta:
+        verbose_name = 'Cash Book Additional Member'
+        verbose_name_plural = 'Cash Book Additional Members'
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cashbook', 'member'],
+                condition=Q(deleted_at__isnull=True),
+                name='one_grant_per_member_per_cashbook',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.member.email} - {self.role} in {self.cashbook.book_name}"
+
+    def get_parent_workspace_id(self):
+        return self.cashbook.workspace_id
+
+
+@pghistory.track()
+class EntryCategory(WorkspaceOwnedModel):
+    GENERAL_CATEGORIES = [
+        'Housing', 'Transportation', 'Food', 'Utilities', 'Clothing', 'Medical/Healthcare',
+        'Insurance', 'Household Items/Supplies', 'Personal', 'Debt', 'Retirement', 'Education',
+        'Savings', 'Gifts/Donations', 'Entertainment', 'Income', 'Other'
+    ]
+
+    cashbook = models.ForeignKey(CashBook, on_delete=models.CASCADE, null=False, blank=False)
+    category_name = models.CharField(max_length=100, null=False, blank=False)
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Entry Category"
+        verbose_name_plural = "Entry Categories"
+        # Covers tombstoned rows too: re-adding a deleted name restores the old row
+        unique_together = ['cashbook', 'category_name']
+        indexes = [
+            models.Index(fields=["workspace", "cashbook", "category_name"]),
+        ]
+        ordering = ['category_name']
+
+    def __str__(self):
+        return f"{self.category_name} - {self.cashbook.book_name}"
+
+    def get_parent_workspace_id(self):
+        return self.cashbook.workspace_id
+
+
+@pghistory.track()
+class PaymentMethod(WorkspaceOwnedModel):
+    GENERAL_PAYMENT_METHODS = [
+        'Cash', 'Credit Card', 'Debit Card', 'bKash', 'Nagad',
+        'Rocket', 'Bank Transfer', 'Online', 'Other'
+    ]
+
+    cashbook = models.ForeignKey(CashBook, on_delete=models.CASCADE, null=False, blank=False)
+    payment_method_name = models.CharField(max_length=100, null=False, blank=False)
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Payment Method"
+        verbose_name_plural = "Payment Methods"
+        # Covers tombstoned rows too: re-adding a deleted name restores the old row
+        unique_together = ['cashbook', 'payment_method_name']
+        indexes = [
+            models.Index(fields=["workspace", "cashbook", "payment_method_name"]),
+        ]
+        ordering = ['payment_method_name']
+
+    def __str__(self):
+        return f"{self.payment_method_name} - {self.cashbook.book_name}"
+
+    def get_parent_workspace_id(self):
+        return self.cashbook.workspace_id
+
+
+@pghistory.track()
+class Entry(WorkspaceOwnedModel):
+    ENTRY_TYPES = (
+        ('cash_in', 'Cash In'),
+        ('cash_out', 'Cash Out'),
+    )
+    SOURCE_CHOICES = (
+        ('manual', 'Manual'),
+        ('sms', 'SMS'),
+        ('email', 'Email'),
+        ('upload', 'Statement upload'),
+        ('ai', 'AI'),
+    )
+
+    cashbook = models.ForeignKey(CashBook, on_delete=models.CASCADE, null=False, blank=False)
+    category = models.ForeignKey(EntryCategory, on_delete=models.SET_NULL, null=True, blank=True)
+    payment_method = models.ForeignKey(PaymentMethod, on_delete=models.SET_NULL, null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='entries_created')
+
+    entry_type = models.CharField(null=False, blank=False, choices=ENTRY_TYPES, default='cash_out', max_length=10)
+    # Always positive, in minor units of `currency`; direction comes from entry_type
+    amount_minor = models.BigIntegerField(null=False, blank=False)
+    currency = models.CharField(max_length=3, editable=False)
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='manual')
+
+    title = models.CharField(max_length=200, null=True, blank=True)
+    remarks = models.TextField(null=True, blank=True)
+
+    entry_date = models.DateField(null=False, blank=False)
+
+    class Meta:
+        verbose_name = "Cashbook Entry"
+        verbose_name_plural = "Cashbook Entries"
+        ordering = ['-entry_date', '-created_at']
+        indexes = [
+            models.Index(fields=['workspace', 'cashbook', 'entry_date']),
+            models.Index(fields=['entry_type']),
+            models.Index(fields=['created_by']),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=Q(amount_minor__gt=0), name='entry_amount_positive'),
+        ]
+
+    def __str__(self):
+        return f"{self.title or self.entry_type} - {self.amount_minor} {self.currency} - {self.cashbook.book_name}"
+
+    def get_parent_workspace_id(self):
+        return self.cashbook.workspace_id
+
+    def save(self, *args, **kwargs):
+        self.currency = self.cashbook.currency
+        super().save(*args, **kwargs)
+
+
+def get_user_bill_filepath(instance, filename):
+    entry = instance.entry
+    return f"workspaces/{entry.workspace_id}/cashbooks/{entry.cashbook_id}/entries/{entry.id}/bills/{filename}"
+
+
+class EntryBills(WorkspaceOwnedModel):
+    allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png']
+
+    entry = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name='bills')
+
+    bill_file = models.FileField(
+        null=False,
+        blank=False,
+        upload_to=get_user_bill_filepath,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=allowed_extensions,
+                message='Please upload a valid file. Allowed formats are: %(allowed_extensions)s'
+            )
+        ]
+    )
+
+    class Meta:
+        verbose_name = "Bill of Entry"
+        verbose_name_plural = "Bills of Entries"
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Bill for {self.entry.title or self.entry.id}"
+
+    def get_parent_workspace_id(self):
+        return self.entry.workspace_id
+
+
+class EntryExtraFields(WorkspaceOwnedModel):
+    entry = models.ForeignKey(Entry, on_delete=models.CASCADE, related_name='extra_fields')
+
+    field_name = models.CharField(null=False, blank=False, max_length=100)
+    field_value = models.TextField(null=False, blank=False)
+
+    class Meta:
+        verbose_name = "Extra Field of Entry"
+        verbose_name_plural = "Extra Fields of Entries"
+        indexes = [
+            models.Index(fields=["entry", "field_name"]),
+        ]
+
+    def __str__(self):
+        return f"{self.field_name}: {self.field_value} - {self.entry.title or self.entry.id}"
+
+    def get_parent_workspace_id(self):
+        return self.entry.workspace_id

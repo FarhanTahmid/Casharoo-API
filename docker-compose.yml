@@ -1,0 +1,51 @@
+# Local stack: PostgreSQL, the API and the background worker.
+#   cp .env.example .env   (fill in SECRET_KEY)
+#   docker compose up --build
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Read by docker/initdb/01-app-role.sh
+      APP_DB_NAME: casharoo
+      APP_DB_USER: casharoo
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-casharoo}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U casharoo -d casharoo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web: &app
+    build: .
+    env_file: .env
+    environment: &app-env
+      PROJECT_ENVIRONMENT: development
+      DEV_DATABASE_HOST: db
+      DEV_DATABASE_PORT: "5432"
+      DEV_DATABASE_NAME: casharoo
+      DEV_DATABASE_USER: casharoo
+      DEV_DATABASE_PASSWORD: ${APP_DB_PASSWORD:-casharoo}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - media:/app/Media_Files
+
+  worker:
+    <<: *app
+    command: python manage.py procrastinate worker
+    ports: []
+    depends_on:
+      web:
+        condition: service_started
+
+volumes:
+  pgdata:
+  media:

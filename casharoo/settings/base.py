@@ -3,9 +3,10 @@ Base Django settings for casharooo project.
 
 """
 import os
+import base64
+import hashlib
 from dotenv import load_dotenv
 from pathlib import Path
-from datetime import timedelta
 from decouple import config
 
 load_dotenv()
@@ -16,6 +17,35 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # SECRET KEY
 SECRET_KEY = os.environ.get('SECRET_KEY')
 
+# Keys for casharoo.fields.EncryptedTextField, newest first. Generate one with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Without the variable (development only) a key is derived from SECRET_KEY.
+FIELD_ENCRYPTION_KEYS = config(
+    'FIELD_ENCRYPTION_KEYS',
+    default='',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
+) or [base64.urlsafe_b64encode(hashlib.sha256((SECRET_KEY or '').encode()).digest()).decode()]
+
+# Number of reverse proxies in front of the app that we run ourselves.
+# X-Forwarded-For is ignored when this is 0.
+TRUSTED_PROXY_COUNT = config('TRUSTED_PROXY_COUNT', default=0, cast=int)
+ALLAUTH_TRUSTED_PROXY_COUNT = TRUSTED_PROXY_COUNT
+
+# Admin lives off the default path in production
+ADMIN_URL = config('ADMIN_URL', default='admin/')
+
+
+def database_from_env(prefix):
+    """Database settings from <PREFIX>_DATABASE_* environment variables"""
+    return {
+        'ENGINE': os.environ.get(f'{prefix}_DATABASE_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.environ.get(f'{prefix}_DATABASE_NAME'),
+        'USER': os.environ.get(f'{prefix}_DATABASE_USER'),
+        'PASSWORD': os.environ.get(f'{prefix}_DATABASE_PASSWORD'),
+        'HOST': os.environ.get(f'{prefix}_DATABASE_HOST'),
+        'PORT': os.environ.get(f'{prefix}_DATABASE_PORT'),
+    }
+
 # Application definition
 
 DJANGO_APPS = [
@@ -25,19 +55,34 @@ DJANGO_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
 ]
 
 THIRD_PARTY_APPS=[
     'rest_framework',
-    'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
+    'drf_spectacular',
+    # Authentication
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
+    'allauth.mfa',
+    'allauth.headless',
+    'allauth.usersessions',
+    # Trigger-based edit history
+    'pgtrigger',
+    'pghistory',
+    # Background jobs
+    'procrastinate.contrib.django',
 ]
 
 LOCAL_APPS=[
-    'app_users',
-    'system_manager',
-    'cashbooks',
+    'identity',
+    'workspaces',
+    'audit',
+    'notifications',
+    'cashbook',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -46,14 +91,21 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
+    'allauth.usersessions.middleware.UserSessionsMiddleware',
+    # Records who made each change in the history tables
+    'pghistory.middleware.HistoryMiddleware',
+    # Row-level security: requests see no tenant rows until a view activates a tenant
+    'workspaces.tenancy.TenantContextMiddleware',
     # Logging middleware
-    'system_manager.logger.middleware.LoggerMiddleware',
+    'audit.logger.middleware.LoggerMiddleware',
 ]
 
 # Root URL configuration
@@ -75,7 +127,75 @@ TEMPLATES = [
 ]
 
 # Custom AUTH model
-AUTH_USER_MODEL = 'app_users.AppUser'
+AUTH_USER_MODEL = 'identity.AppUser'
+
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+]
+
+# django-allauth: Django is the only identity authority. The mobile app uses the
+# headless API (/_allauth/app/v1/) and sends its session token in X-Session-Token.
+HEADLESS_ONLY = True
+HEADLESS_CLIENTS = ('app',)
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*']
+ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
+# Codes typed into the app, no links: nothing to deep-link and no web frontend needed
+ACCOUNT_EMAIL_VERIFICATION_BY_CODE_ENABLED = True
+ACCOUNT_PASSWORD_RESET_BY_CODE_ENABLED = True
+ACCOUNT_EMAIL_SUBJECT_PREFIX = '[Casharoo] '
+MFA_SUPPORTED_TYPES = ['totp', 'recovery_codes']
+MFA_TOTP_ISSUER = 'Casharoo'
+USERSESSIONS_TRACK_ACTIVITY = True
+
+# Google sign-in: one entry per platform client ID. The app sends the Google ID
+# token to /_allauth/app/v1/auth/provider/token together with its client ID.
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APPS': [
+            {'client_id': client_id, 'secret': ''}
+            for client_id in (
+                os.environ.get('ANDROID_OAUTH2_CLIENT_ID'),
+                os.environ.get('IOS_OAUTH2_CLIENT_ID'),
+                os.environ.get('WEB_OAUTH2_CLIENT_ID'),
+            ) if client_id
+        ],
+    }
+}
+
+# Email. EMAIL_BACKEND is set per environment; the worker delivers queued
+# mail through EMAIL_DELIVERY_BACKEND unless an SMTP account is set up in the admin.
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Casharoo <no-reply@localhost>')
+EMAIL_DELIVERY_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_HOST = config('EMAIL_HOST', default='localhost')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+
+# CORS Configuration
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:3000,http://127.0.0.1:3000',
+    cast=lambda v: [s.strip() for s in v.split(',')]
+)
+CORS_ALLOW_CREDENTIALS = True
+
+# WSGI APPLICATION
+WSGI_APPLICATION = 'casharoo.wsgi.application'
+
+# Static files (CSS, JavaScript, Images)
+STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# Media files
+MEDIA_ROOT = os.path.join(BASE_DIR, 'Media_Files/')
+MEDIA_URL = "/media_files/"
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -118,7 +238,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'allauth.headless.contrib.rest_framework.authentication.XSessionTokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -134,9 +254,20 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/hour',
-        'user': '1000/hour'
-    }
+        'user': '1000/hour',
+    },
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
+
+# OpenAPI schema
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Casharoo API',
+    'DESCRIPTION': 'Money amounts are integers in minor units (paisa, cents) with an ISO 4217 currency code.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': r'/api/v[0-9]+',
+}
+
 
 # Logging configuration
 LOGS_DIR = BASE_DIR/'logs'
@@ -260,7 +391,7 @@ LOGGING = {
     'loggers': {
         # HTTP request/response logger
         # Used by ERPLoggerMiddleware for all web traffic logging
-        'erp.requests': {
+        'casharooo.requests': {
             'handlers': ['requests_file', 'console'],  # File + console output
             'level': 'INFO',  # Log INFO level and above
             'propagate': False,  # Don't pass to parent loggers (avoid duplicates)
@@ -268,7 +399,7 @@ LOGGING = {
         
         # Error and exception logger  
         # Used for unhandled exceptions and application errors
-        'erp.errors': {
+        'casharooo.errors': {
             'handlers': ['errors_file', 'console'],  # File + console output
             'level': 'WARNING',  # Log WARNING level and above
             'propagate': False,  # Independent error handling
@@ -276,7 +407,7 @@ LOGGING = {
         
         # Authentication and security event logger
         # Used for login/logout events and security monitoring
-        'erp.auth': {
+        'casharooo.auth': {
             'handlers': ['auth_file', 'console'],  # File + console output
             'level': 'INFO',  # Log all auth events
             'propagate': False,  # Separate from general logging

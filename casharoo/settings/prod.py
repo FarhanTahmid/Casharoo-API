@@ -1,95 +1,50 @@
 """
 Django PRODUCTION settings for Casharooo.
 """
+from django.core.exceptions import ImproperlyConfigured
 from .base import *
 
 # DEBUG
 DEBUG = False
+
+if not SECRET_KEY:
+    raise ImproperlyConfigured('SECRET_KEY must be set in production.')
+if not config('FIELD_ENCRYPTION_KEYS', default=''):
+    raise ImproperlyConfigured('FIELD_ENCRYPTION_KEYS must be set in production.')
 
 # Hosts
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
     cast=lambda v: [s.strip() for s in v.split(',')]
 )
-
-# WSGI APPLICATION
-WSGI_APPLICATION = 'casharoo.wsgi.application'
-
-# Database
-DATABASES = {
-    'default': {
-        'ENGINE': os.environ.get('PROD_DATABASE_ENGINE'),
-        'NAME': os.environ.get('PROD_DATABASE_NAME'),
-        'USER': os.environ.get('PROD_DATABASE_USER'),
-        'PASSWORD': os.environ.get('PROD_DATABASE_PASSWORD'),
-        'HOST': os.environ.get('PROD_DATABASE_HOST'),
-        'PORT': os.environ.get('PROD_DATABASE_PORT'),
-    }
-}
-
-# JWT Configuration
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
-    'JWK_URL': None,
-    'LEEWAY': 0,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
-    'JTI_CLAIM': 'jti',
-    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
-    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
-    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
-}
-
-# CORS Configuration
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:3000,http://127.0.0.1:3000',
-    cast=lambda v: [s.strip() for s in v.split(',')]
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='',
+    cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
 )
 
-CORS_ALLOW_CREDENTIALS = True
+# Database
+DATABASES = {'default': database_from_env('PROD')}
+
+# Email goes through the background worker, which sends it over SMTP
+EMAIL_BACKEND = 'notifications.backends.QueuedEmailBackend'
+EMAIL_DELIVERY_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 
 # Security Configuration
-SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_SECONDS = 31536000
-SECURE_REDIRECT_EXEMPT = []
+SECURE_REDIRECT_EXEMPT = [r'^health/$']
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_HSTS_PRELOAD = True
-
-
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
-# static root
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_DIRS = [
-        os.path.join(BASE_DIR, 'static'),
-    ]
-# Media files
-MEDIA_ROOT = os.path.join(BASE_DIR, 'Media_Files/')
-MEDIA_URL = "/media_files/"
+if TRUSTED_PROXY_COUNT:
+    # The proxy terminates TLS and tells us the original scheme
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Additional Settings for Production for logging
-if not DEBUG:
-    # In production, don't log to console, only to files
-    for logger_config in LOGGING['loggers'].values():
-        if 'console' in logger_config.get('handlers', []):
-            logger_config['handlers'].remove('console')
+# In production, don't log to console, only to files
+for logger_config in LOGGING['loggers'].values():
+    if 'console' in logger_config.get('handlers', []):
+        logger_config['handlers'].remove('console')

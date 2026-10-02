@@ -1,0 +1,37 @@
+import procrastinate
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives, get_connection
+from procrastinate.contrib.django import app
+
+from .email_handler import EmailHandler
+
+
+class EmailDeliveryError(Exception):
+    pass
+
+
+def deliver_email(subject, body, to, from_email=None, html_body=None, purpose='default'):
+    """
+    Send one email now. Uses the SMTP account configured in the admin for this
+    purpose when there is one, otherwise settings.EMAIL_DELIVERY_BACKEND.
+    """
+    if EmailHandler.get_email_account(purpose):
+        success, message, _ = EmailHandler.send_email(
+            to_emails=to, subject=subject, text_content=body, html_content=html_body, purpose=purpose
+        )
+        if not success:
+            raise EmailDeliveryError(message)
+        return
+
+    email = EmailMultiAlternatives(
+        subject=subject, body=body, from_email=from_email, to=to,
+        connection=get_connection(settings.EMAIL_DELIVERY_BACKEND),
+    )
+    if html_body:
+        email.attach_alternative(html_body, 'text/html')
+    email.send()
+
+
+@app.task(queue='email', retry=procrastinate.RetryStrategy(max_attempts=5, exponential_wait=10))
+def send_email(subject, body, to, from_email=None, html_body=None, purpose='default'):
+    deliver_email(subject, body, to, from_email=from_email, html_body=html_body, purpose=purpose)
