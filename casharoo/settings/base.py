@@ -11,7 +11,7 @@ from decouple import config
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # SECRET KEY
 SECRET_KEY = os.environ.get('SECRET_KEY')

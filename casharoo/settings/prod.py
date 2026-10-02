@@ -7,7 +7,10 @@ from .base import *
 DEBUG = False
 
 # Hosts
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = config(
+    'ALLOWED_HOSTS',
+    cast=lambda v: [s.strip() for s in v.split(',')]
+)
 
 # WSGI APPLICATION
 WSGI_APPLICATION = 'casharoo.wsgi.application'
