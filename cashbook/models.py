@@ -147,8 +147,13 @@ class EntryCategory(WorkspaceOwnedModel):
     class Meta:
         verbose_name = "Entry Category"
         verbose_name_plural = "Entry Categories"
-        # Covers tombstoned rows too: re-adding a deleted name restores the old row
-        unique_together = ['cashbook', 'category_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cashbook', 'category_name'],
+                condition=Q(deleted_at__isnull=True),
+                name='one_category_name_per_cashbook',
+            ),
+        ]
         indexes = [
             models.Index(fields=["workspace", "cashbook", "category_name"]),
         ]
@@ -175,8 +180,13 @@ class PaymentMethod(WorkspaceOwnedModel):
     class Meta:
         verbose_name = "Payment Method"
         verbose_name_plural = "Payment Methods"
-        # Covers tombstoned rows too: re-adding a deleted name restores the old row
-        unique_together = ['cashbook', 'payment_method_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['cashbook', 'payment_method_name'],
+                condition=Q(deleted_at__isnull=True),
+                name='one_payment_method_name_per_cashbook',
+            ),
+        ]
         indexes = [
             models.Index(fields=["workspace", "cashbook", "payment_method_name"]),
         ]

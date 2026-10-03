@@ -4,6 +4,7 @@ from rest_framework.response import Response
 
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.db.models import F
 
 from workspaces.tenancy import TenantScopedMixin
 
@@ -90,7 +91,7 @@ class EntryCategoryViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         existing = EntryCategory.all_objects.filter(
             cashbook=cashbook,
             category_name=serializer.validated_data['category_name']
-        ).first()
+        ).order_by(F('deleted_at').asc(nulls_first=True)).first()
         
         if existing:
             if existing.is_deleted:
@@ -201,7 +202,7 @@ class EntryCategoryViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 existing = EntryCategory.all_objects.filter(
                     cashbook=cashbook,
                     category_name=name
-                ).first()
+                ).order_by(F('deleted_at').asc(nulls_first=True)).first()
                 
                 if existing:
                     if existing.is_deleted:

@@ -6,13 +6,16 @@ from rest_framework.response import Response
 
 from .models import Workspace, Membership
 from .serializers import WorkspaceSerializer, MembershipSerializer
-from .services import create_workspace, workspaces_for
+from .services import create_demo_business, create_workspace, workspaces_for
+from .tenancy import TenantScopedMixin
 
 
-class WorkspaceViewSet(mixins.ListModelMixin,
+class WorkspaceViewSet(TenantScopedMixin,
+                       mixins.ListModelMixin,
                        mixins.RetrieveModelMixin,
                        mixins.CreateModelMixin,
                        mixins.UpdateModelMixin,
+                       mixins.DestroyModelMixin,
                        viewsets.GenericViewSet):
     """
     Workspaces the user belongs to. Creating one always makes a business
@@ -39,6 +42,19 @@ class WorkspaceViewSet(mixins.ListModelMixin,
         if serializer.instance.role_of(self.request.user) not in Membership.MANAGER_ROLES:
             raise PermissionDenied('Only the owner or an admin can edit this workspace.')
         serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.kind == Workspace.KIND_PERSONAL:
+            raise PermissionDenied('The personal workspace cannot be deleted.')
+        if instance.owner_id != self.request.user.id:
+            raise PermissionDenied('Only the owner can delete this workspace.')
+        instance.soft_delete()
+
+    @action(detail=False, methods=['post'])
+    def demo(self, request):
+        """A sample business with a few weeks of entries, for trying the app out."""
+        workspace = create_demo_business(request.user)
+        return Response(self.get_serializer(workspace).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'])
     def members(self, request, pk=None):

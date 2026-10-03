@@ -5,7 +5,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from cashbook.models import CashBook, Entry
-from .models import Membership, Workspace
+from .models import Membership, Workspace, WorkspaceOwnedModel
 from .services import create_workspace, get_personal_workspace
 from .tenancy import activate_tenant_context, bypass_tenant_context, clear_tenant_context
 
@@ -13,7 +13,7 @@ User = get_user_model()
 
 # Apps whose models hold tenant data. Each model must carry the workspace key
 # and its table must have row-level security, unless listed as exempt.
-TENANT_APPS = ['cashbook']
+TENANT_APPS = ['cashbook', 'ledger_personal']
 EXEMPT_MODELS = set()
 
 
@@ -44,7 +44,48 @@ class TenantKeyTests(TestCase):
             )
 
 
-class RowLevelSecurityTests(TestCase):
+    def test_every_synced_table_has_the_cursor_trigger(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT c.relname FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid WHERE t.tgname = 'sync_server_seq'"
+            )
+            with_trigger = {row[0] for row in cursor.fetchall()}
+        for model in tenant_models():
+            if issubclass(model, WorkspaceOwnedModel):
+                self.assertIn(
+                    model._meta.db_table, with_trigger,
+                    f"{model._meta.db_table} has no sync cursor. Add it with sync.sql.enable_sync in a migration.",
+                )
+
+
+class UnprivilegedRoleMixin:
+    """
+    PostgreSQL superusers skip row-level security. On a superuser connection
+    (local development, CI) this switches the test to a plain role, so the
+    policies apply as they do in production.
+    """
+
+    def use_unprivileged_role(self):
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")
+            self.switched_role = cursor.fetchone()[0]
+            if self.switched_role:
+                # Rolled back with the test transaction
+                cursor.execute("CREATE ROLE casharoo_rls_probe NOLOGIN")
+                cursor.execute("GRANT USAGE ON SCHEMA public TO casharoo_rls_probe")
+                cursor.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO casharoo_rls_probe")
+                cursor.execute("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO casharoo_rls_probe")
+                cursor.execute("SET LOCAL ROLE casharoo_rls_probe")
+        self.addCleanup(self.restore_role)
+
+    def restore_role(self):
+        with connection.cursor() as cursor:
+            if self.switched_role:
+                cursor.execute("RESET ROLE")
+        bypass_tenant_context()
+
+
+class RowLevelSecurityTests(UnprivilegedRoleMixin, TestCase):
     """The database itself refuses cross-tenant reads and writes."""
 
     def setUp(self):
@@ -54,25 +95,6 @@ class RowLevelSecurityTests(TestCase):
         self.bob_book = CashBook.objects.create(workspace=get_personal_workspace(self.bob), book_name='Bob')
         Entry.objects.create(cashbook=self.bob_book, amount_minor=100, entry_date='2026-10-01')
         self.use_unprivileged_role()
-        self.addCleanup(self.restore_role)
-
-    def use_unprivileged_role(self):
-        """Superusers skip RLS, so on a superuser connection switch to a plain role for the test."""
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")
-            self.switched_role = cursor.fetchone()[0]
-            if self.switched_role:
-                # Rolled back with the test transaction
-                cursor.execute("CREATE ROLE casharoo_rls_probe NOLOGIN")
-                cursor.execute("GRANT USAGE ON SCHEMA public TO casharoo_rls_probe")
-                cursor.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO casharoo_rls_probe")
-                cursor.execute("SET LOCAL ROLE casharoo_rls_probe")
-
-    def restore_role(self):
-        with connection.cursor() as cursor:
-            if self.switched_role:
-                cursor.execute("RESET ROLE")
-        bypass_tenant_context()
 
     def test_no_context_shows_nothing(self):
         clear_tenant_context()
@@ -94,8 +116,8 @@ class RowLevelSecurityTests(TestCase):
             cursor.execute("SAVEPOINT before_insert")
             with self.assertRaisesMessage(Exception, 'row-level security'):
                 cursor.execute(
-                    "INSERT INTO cashbook_cashbook (id, version, created_at, updated_at, workspace_id, book_name, currency) "
-                    "VALUES (gen_random_uuid(), 1, now(), now(), %s, 'Planted', 'BDT')",
+                    "INSERT INTO cashbook_cashbook (id, version, server_seq, created_at, updated_at, workspace_id, book_name, currency) "
+                    "VALUES (gen_random_uuid(), 1, 0, now(), now(), %s, 'Planted', 'BDT')",
                     [self.bob_book.workspace_id],
                 )
             cursor.execute("ROLLBACK TO SAVEPOINT before_insert")

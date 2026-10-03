@@ -61,6 +61,9 @@ class WorkspaceOwnedModel(SyncModel):
         'workspaces.Workspace', on_delete=models.CASCADE,
         related_name='%(app_label)s_%(class)s_set', editable=False,
     )
+    # Change cursor for sync. Assigned by a database trigger on every insert
+    # and update (see sync/sql.py), so the value held in Python may be stale.
+    server_seq = models.BigIntegerField(default=0, editable=False)
 
     class Meta:
         abstract = True
@@ -87,6 +90,8 @@ class Workspace(SyncModel):
     kind = models.CharField(max_length=10, choices=KIND_CHOICES, default=KIND_PERSONAL)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='owned_workspaces')
     default_currency = models.CharField(max_length=3, default='BDT')
+    # Sample business created during onboarding; safe to throw away
+    is_demo = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['created_at']

@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from django.db import transaction
+from django.db.models import F
 
 from workspaces.tenancy import TenantScopedMixin
 from django.shortcuts import get_object_or_404
@@ -87,7 +88,7 @@ class PaymentMethodViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         existing = PaymentMethod.all_objects.filter(
             cashbook=cashbook,
             payment_method_name=serializer.validated_data['payment_method_name']
-        ).first()
+        ).order_by(F('deleted_at').asc(nulls_first=True)).first()
         
         if existing:
             if existing.is_deleted:
@@ -198,7 +199,7 @@ class PaymentMethodViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 existing = PaymentMethod.all_objects.filter(
                     cashbook=cashbook,
                     payment_method_name=name
-                ).first()
+                ).order_by(F('deleted_at').asc(nulls_first=True)).first()
                 
                 if existing:
                     if existing.is_deleted:

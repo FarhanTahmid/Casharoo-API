@@ -10,10 +10,10 @@ class WorkspaceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Workspace
         fields = [
-            'id', 'name', 'kind', 'owner', 'default_currency', 'role',
+            'id', 'name', 'kind', 'owner', 'default_currency', 'is_demo', 'role',
             'version', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'kind', 'owner', 'version', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'kind', 'owner', 'is_demo', 'version', 'created_at', 'updated_at']
 
     def get_role(self, obj) -> str:
         return obj.role_of(self.context['request'].user)
