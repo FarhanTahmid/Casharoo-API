@@ -23,14 +23,14 @@ from audit.utils.client_ip import get_client_ip
 
 # Initialize specialized loggers for different types of events
 # These loggers are configured in Django settings.py and route to different files
-request_logger = logging.getLogger('casharooo.requests')  # HTTP requests/responses
-error_logger = logging.getLogger('casharooo.errors')      # Exceptions and errors
-auth_logger = logging.getLogger('casharooo.auth')         # Authentication events
+request_logger = logging.getLogger('spendroo.requests')  # HTTP requests/responses
+error_logger = logging.getLogger('spendroo.errors')      # Exceptions and errors
+auth_logger = logging.getLogger('spendroo.auth')         # Authentication events
 
 
 class LoggerMiddleware(MiddlewareMixin):
     """
-    Comprehensive logging middleware for Casharooo system.
+    Comprehensive logging middleware for Spendroo system.
     
     This middleware automatically intercepts and logs all HTTP traffic passing through
     the Django application. It provides detailed logging of requests, responses, and

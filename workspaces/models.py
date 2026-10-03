@@ -3,7 +3,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from casharoo.ids import uuid7
+from spendroo.ids import uuid7
 
 
 class AliveManager(models.Manager):

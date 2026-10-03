@@ -1,6 +1,6 @@
 """
 Selects the settings module from PROJECT_ENVIRONMENT, so that
-DJANGO_SETTINGS_MODULE='casharoo.settings' works for wsgi/asgi.
+DJANGO_SETTINGS_MODULE='spendroo.settings' works for wsgi/asgi.
 """
 import os
 from dotenv import load_dotenv

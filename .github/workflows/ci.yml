@@ -11,13 +11,13 @@ jobs:
       postgres:
         image: postgres:17
         env:
-          POSTGRES_USER: casharoo
-          POSTGRES_PASSWORD: casharoo
-          POSTGRES_DB: casharoo
+          POSTGRES_USER: spendroo
+          POSTGRES_PASSWORD: spendroo
+          POSTGRES_DB: spendroo
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U casharoo"
+          --health-cmd "pg_isready -U spendroo"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -26,9 +26,9 @@ jobs:
       SECRET_KEY: ci-only-not-a-secret
       TEST_DATABASE_HOST: localhost
       TEST_DATABASE_PORT: "5432"
-      TEST_DATABASE_NAME: casharoo
-      TEST_DATABASE_USER: casharoo
-      TEST_DATABASE_PASSWORD: casharoo
+      TEST_DATABASE_NAME: spendroo
+      TEST_DATABASE_USER: spendroo
+      TEST_DATABASE_PASSWORD: spendroo
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -73,4 +73,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t casharoo-api .
+      - run: docker build -t spendroo-api .

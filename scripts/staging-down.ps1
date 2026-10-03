@@ -11,6 +11,6 @@ if ($Mode -eq 'docker') {
 }
 else {
     Get-CimInstance Win32_Process |
-        Where-Object { $_.CommandLine -match 'waitress.+casharoo\.wsgi|manage\.py procrastinate worker' } |
+        Where-Object { $_.CommandLine -match 'waitress.+spendroo\.wsgi|manage\.py procrastinate worker' } |
         ForEach-Object { Stop-Process -Id $_.ProcessId -Confirm:$false; Write-Host "Stopped $($_.ProcessId)" }
 }

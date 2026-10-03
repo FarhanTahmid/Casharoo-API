@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 from workspaces.models import Membership
 from workspaces.services import create_workspace, get_personal_workspace
 from .models import CashBook, Entry, EntryCategory
-from casharoo.money import format_money, to_major
+from spendroo.money import format_money, to_major
 
 User = get_user_model()
 

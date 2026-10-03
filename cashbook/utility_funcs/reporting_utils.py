@@ -11,7 +11,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from io import BytesIO
 
-from casharoo.money import currency_exponent, format_money, to_major
+from spendroo.money import currency_exponent, format_money, to_major
 
 
 def get_date_range(period_type, custom_start=None, custom_end=None):

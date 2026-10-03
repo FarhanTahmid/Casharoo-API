@@ -1,5 +1,5 @@
 """
-Django TEST settings for Casharooo. Used by CI.
+Django TEST settings for Spendroo. Used by CI.
 """
 from .base import *
 

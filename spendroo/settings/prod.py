@@ -1,5 +1,5 @@
 """
-Django PRODUCTION settings for Casharooo.
+Django PRODUCTION settings for Spendroo.
 """
 from django.core.exceptions import ImproperlyConfigured
 from .base import *

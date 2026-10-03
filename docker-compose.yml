@@ -8,14 +8,14 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       # Read by docker/initdb/01-app-role.sh
-      APP_DB_NAME: casharoo
-      APP_DB_USER: casharoo
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-casharoo}
+      APP_DB_NAME: spendroo
+      APP_DB_USER: spendroo
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-spendroo}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U casharoo -d casharoo"]
+      test: ["CMD-SHELL", "pg_isready -U spendroo -d spendroo"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -27,9 +27,9 @@ services:
       PROJECT_ENVIRONMENT: development
       DEV_DATABASE_HOST: db
       DEV_DATABASE_PORT: "5432"
-      DEV_DATABASE_NAME: casharoo
-      DEV_DATABASE_USER: casharoo
-      DEV_DATABASE_PASSWORD: ${APP_DB_PASSWORD:-casharoo}
+      DEV_DATABASE_NAME: spendroo
+      DEV_DATABASE_USER: spendroo
+      DEV_DATABASE_PASSWORD: ${APP_DB_PASSWORD:-spendroo}
     depends_on:
       db:
         condition: service_healthy

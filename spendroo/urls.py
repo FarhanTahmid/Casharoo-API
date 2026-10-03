@@ -1,5 +1,5 @@
 """
-URL configuration for casharoo project.
+URL configuration for spendroo project.
 """
 from django.contrib import admin
 from django.urls import path,include

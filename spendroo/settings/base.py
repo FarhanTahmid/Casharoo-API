@@ -1,5 +1,5 @@
 """
-Base Django settings for casharooo project.
+Base Django settings for spendroo project.
 
 """
 import os
@@ -17,7 +17,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # SECRET KEY
 SECRET_KEY = os.environ.get('SECRET_KEY')
 
-# Keys for casharoo.fields.EncryptedTextField, newest first. Generate one with:
+# Keys for spendroo.fields.EncryptedTextField, newest first. Generate one with:
 #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 # Without the variable (development only) a key is derived from SECRET_KEY.
 FIELD_ENCRYPTION_KEYS = config(
@@ -111,7 +111,7 @@ MIDDLEWARE = [
 ]
 
 # Root URL configuration
-ROOT_URLCONF = 'casharoo.urls'
+ROOT_URLCONF = 'spendroo.urls'
 
 TEMPLATES = [
     {
@@ -151,9 +151,9 @@ ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
 # Codes typed into the app, no links: nothing to deep-link and no web frontend needed
 ACCOUNT_EMAIL_VERIFICATION_BY_CODE_ENABLED = True
 ACCOUNT_PASSWORD_RESET_BY_CODE_ENABLED = True
-ACCOUNT_EMAIL_SUBJECT_PREFIX = '[Casharoo] '
+ACCOUNT_EMAIL_SUBJECT_PREFIX = '[Spendroo] '
 MFA_SUPPORTED_TYPES = ['totp', 'recovery_codes']
-MFA_TOTP_ISSUER = 'Casharoo'
+MFA_TOTP_ISSUER = 'Spendroo'
 USERSESSIONS_TRACK_ACTIVITY = True
 
 # Google sign-in: one entry per platform client ID. The app sends the Google ID
@@ -173,7 +173,7 @@ SOCIALACCOUNT_PROVIDERS = {
 
 # Email. EMAIL_BACKEND is set per environment; the worker delivers queued
 # mail through EMAIL_DELIVERY_BACKEND unless an SMTP account is set up in the admin.
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Casharoo <no-reply@localhost>')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Spendroo <no-reply@localhost>')
 EMAIL_DELIVERY_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 EMAIL_HOST = config('EMAIL_HOST', default='localhost')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
@@ -190,7 +190,7 @@ CORS_ALLOWED_ORIGINS = config(
 CORS_ALLOW_CREDENTIALS = True
 
 # WSGI APPLICATION
-WSGI_APPLICATION = 'casharoo.wsgi.application'
+WSGI_APPLICATION = 'spendroo.wsgi.application'
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
@@ -264,7 +264,7 @@ REST_FRAMEWORK = {
 
 # OpenAPI schema
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Casharoo API',
+    'TITLE': 'Spendroo API',
     'DESCRIPTION': 'Money amounts are integers in minor units (paisa, cents) with an ISO 4217 currency code.',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
@@ -394,7 +394,7 @@ LOGGING = {
     'loggers': {
         # HTTP request/response logger
         # Used by ERPLoggerMiddleware for all web traffic logging
-        'casharooo.requests': {
+        'spendroo.requests': {
             'handlers': ['requests_file', 'console'],  # File + console output
             'level': 'INFO',  # Log INFO level and above
             'propagate': False,  # Don't pass to parent loggers (avoid duplicates)
@@ -402,7 +402,7 @@ LOGGING = {
         
         # Error and exception logger  
         # Used for unhandled exceptions and application errors
-        'casharooo.errors': {
+        'spendroo.errors': {
             'handlers': ['errors_file', 'console'],  # File + console output
             'level': 'WARNING',  # Log WARNING level and above
             'propagate': False,  # Independent error handling
@@ -410,7 +410,7 @@ LOGGING = {
         
         # Authentication and security event logger
         # Used for login/logout events and security monitoring
-        'casharooo.auth': {
+        'spendroo.auth': {
             'handlers': ['auth_file', 'console'],  # File + console output
             'level': 'INFO',  # Log all auth events
             'propagate': False,  # Separate from general logging

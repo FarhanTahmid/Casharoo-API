@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db import transaction
 from workspaces.models import Membership, Workspace
 from workspaces.services import get_personal_workspace, workspaces_for
-from casharoo.money import validate_currency
+from spendroo.money import validate_currency
 from .models import (
     CashBook, CashBookAdditionalMember, EntryCategory,
     PaymentMethod, Entry, EntryBills, EntryExtraFields

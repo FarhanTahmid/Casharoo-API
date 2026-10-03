@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from casharoo.money import validate_currency
+from spendroo.money import validate_currency
 from .models import Workspace, Membership
 
 

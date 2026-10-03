@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Starts Casharoo staging on this machine and opens a Cloudflare quick tunnel to it.
+Starts Spendroo staging on this machine and opens a Cloudflare quick tunnel to it.
 
 .DESCRIPTION
 Runs the API with production settings, waits until it answers, then starts
@@ -58,7 +58,7 @@ else {
     Start-Process $python -WindowStyle Hidden `
         -ArgumentList '-m', 'waitress', '--listen', "127.0.0.1:$Port", '--threads', '8', `
             '--trusted-proxy', '127.0.0.1', '--trusted-proxy-headers', '"x-forwarded-proto x-forwarded-for"', `
-            'casharoo.wsgi:application' `
+            'spendroo.wsgi:application' `
         -RedirectStandardOutput "$logs\staging-web.out.log" -RedirectStandardError "$logs\staging-web.err.log"
     Start-Process $python -WindowStyle Hidden `
         -ArgumentList 'manage.py', 'procrastinate', 'worker' `

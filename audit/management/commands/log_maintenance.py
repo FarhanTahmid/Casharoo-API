@@ -62,7 +62,7 @@ class Command(BaseCommand):
     """
     
     # Command help text displayed with --help option
-    help = 'Casharooo Log maintenance and information - comprehensive log management operations'   
+    help = 'Spendroo Log maintenance and information - comprehensive log management operations'   
     def add_arguments(self, parser):
         """
         Define command-line arguments for the maintenance command.

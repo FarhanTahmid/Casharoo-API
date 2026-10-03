@@ -1,5 +1,5 @@
 """
-Django DEVELOPMENT settings for Casharooo.
+Django DEVELOPMENT settings for Spendroo.
 """
 from .base import *
 

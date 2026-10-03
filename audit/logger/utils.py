@@ -72,7 +72,7 @@ def get_log_files_info():
                 })
             except (OSError, PermissionError) as e:
                 # Log access errors but continue processing other files
-                logging.getLogger('casharooo.errors').warning(f"Could not access log file {log_file}: {e}")
+                logging.getLogger('spendroo.errors').warning(f"Could not access log file {log_file}: {e}")
     
     # Sort by modification time (most recent first) for better usability
     return sorted(log_files, key=lambda x: x['modified'], reverse=True)
@@ -147,13 +147,13 @@ def compress_old_logs():
                     compressed_count += 1
                     
                     # Log compression activity for audit trail
-                    logging.getLogger('casharooo.requests').info(
+                    logging.getLogger('spendroo.requests').info(
                         f"Compressed old log file: {log_file} -> {compressed_file_path}"
                     )
                     
             except (OSError, IOError) as e:
                 # Log compression errors but continue with other files
-                logging.getLogger('casharooo.errors').error(f"Failed to compress {log_file}: {e}")
+                logging.getLogger('spendroo.errors').error(f"Failed to compress {log_file}: {e}")
     
     return compressed_count
 
@@ -217,11 +217,11 @@ def clean_old_compressed_logs():
                 removed_count += 1
                 
                 # Log removal activity for audit trail
-                logging.getLogger('casharooo.requests').info(f"Removed old compressed log: {gz_file}")
+                logging.getLogger('spendroo.requests').info(f"Removed old compressed log: {gz_file}")
                 
         except (OSError, PermissionError) as e:
             # Log deletion errors but continue with other files
-            logging.getLogger('casharooo.errors').error(f"Failed to remove compressed log {gz_file}: {e}")
+            logging.getLogger('spendroo.errors').error(f"Failed to remove compressed log {gz_file}: {e}")
     
     return removed_count
 
@@ -292,7 +292,7 @@ def get_recent_errors(hours=24, max_lines=100):
                 
     except (OSError, IOError, UnicodeDecodeError) as e:
         # Log file reading errors but don't crash the function
-        logging.getLogger('casharooo.errors').error(f"Error reading error log: {e}")
+        logging.getLogger('spendroo.errors').error(f"Error reading error log: {e}")
     
     return recent_errors
 
@@ -340,7 +340,7 @@ def log_business_event(event_name, details=None):
             'hire_date': '2025-01-15'
         })
     """
-    logger = logging.getLogger('casharooo.requests')
+    logger = logging.getLogger('spendroo.requests')
     
     # Build log message with event name
     log_message = f"BUSINESS EVENT: {event_name}"
@@ -397,7 +397,7 @@ def log_security_event(event_name, details=None, severity='WARNING'):
             'time_window': '5_minutes'
         }, 'WARNING')
     """
-    logger = logging.getLogger('casharooo.auth')
+    logger = logging.getLogger('spendroo.auth')
     
     # Build log message with security event name
     log_message = f"SECURITY EVENT: {event_name}"

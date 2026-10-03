@@ -1,6 +1,6 @@
 from django.db import models
 
-from casharoo.fields import EncryptedTextField
+from spendroo.fields import EncryptedTextField
 
 
 class EmailAccounts(models.Model):

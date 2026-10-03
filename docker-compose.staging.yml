@@ -14,9 +14,9 @@ services:
       PROJECT_ENVIRONMENT: production
       PROD_DATABASE_HOST: db
       PROD_DATABASE_PORT: "5432"
-      PROD_DATABASE_NAME: casharoo
-      PROD_DATABASE_USER: casharoo
-      PROD_DATABASE_PASSWORD: ${APP_DB_PASSWORD:-casharoo}
+      PROD_DATABASE_NAME: spendroo
+      PROD_DATABASE_USER: spendroo
+      PROD_DATABASE_PASSWORD: ${APP_DB_PASSWORD:-spendroo}
       # cloudflared is the one proxy in front and says the visitor used HTTPS
       TRUSTED_PROXY_COUNT: "1"
       STAGING_TUNNEL: "1"

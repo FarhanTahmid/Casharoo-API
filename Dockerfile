@@ -21,4 +21,4 @@ EXPOSE 8000
 
 # The web process. The worker uses the same image with:
 #   python manage.py procrastinate worker
-CMD ["sh", "-c", "python manage.py collectstatic --noinput && python manage.py migrate --noinput && gunicorn casharoo.wsgi:application --bind 0.0.0.0:8000 --workers 3"]
+CMD ["sh", "-c", "python manage.py collectstatic --noinput && python manage.py migrate --noinput && gunicorn spendroo.wsgi:application --bind 0.0.0.0:8000 --workers 3"]

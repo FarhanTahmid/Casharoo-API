@@ -71,11 +71,11 @@ class UnprivilegedRoleMixin:
             self.switched_role = cursor.fetchone()[0]
             if self.switched_role:
                 # Rolled back with the test transaction
-                cursor.execute("CREATE ROLE casharoo_rls_probe NOLOGIN")
-                cursor.execute("GRANT USAGE ON SCHEMA public TO casharoo_rls_probe")
-                cursor.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO casharoo_rls_probe")
-                cursor.execute("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO casharoo_rls_probe")
-                cursor.execute("SET LOCAL ROLE casharoo_rls_probe")
+                cursor.execute("CREATE ROLE spendroo_rls_probe NOLOGIN")
+                cursor.execute("GRANT USAGE ON SCHEMA public TO spendroo_rls_probe")
+                cursor.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO spendroo_rls_probe")
+                cursor.execute("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO spendroo_rls_probe")
+                cursor.execute("SET LOCAL ROLE spendroo_rls_probe")
         self.addCleanup(self.restore_role)
 
     def restore_role(self):

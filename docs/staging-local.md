@@ -23,8 +23,8 @@ Create a database and a role that is **not** a superuser (superusers skip
 row-level security, the second layer of tenant isolation):
 
 ```
-psql -U postgres -c "CREATE ROLE casharoo_staging LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'choose-one'"
-psql -U postgres -c "CREATE DATABASE casharoo_staging OWNER casharoo_staging"
+psql -U postgres -c "CREATE ROLE spendroo_staging LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'choose-one'"
+psql -U postgres -c "CREATE DATABASE spendroo_staging OWNER spendroo_staging"
 ```
 
 and set `PROD_DATABASE_*` in `.env.staging` to match.

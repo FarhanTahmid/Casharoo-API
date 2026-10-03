@@ -1,4 +1,4 @@
-# Casharoo API
+# Spendroo API
 
 Django 5.2 + Django REST Framework on PostgreSQL. One deployable plus a background worker.
 
@@ -50,11 +50,11 @@ Tests: `python manage.py test`.
   Tests fail if a table is missed.
 - **Synced tables** are listed in `sync/registry.py` and need `sync.sql.enable_sync` in a migration
   (a trigger stamps `server_seq`). Tests fail if a tenant table lacks it.
-- **Ids** are UUIDv7 (`casharoo.ids.uuid7`); clients generate the same kind offline.
+- **Ids** are UUIDv7 (`spendroo.ids.uuid7`); clients generate the same kind offline.
 - **Deletes** are tombstones (`soft_delete()`), never SQL deletes, so clients can sync them.
   Deleting a cashbook tombstones its entries, categories, payment methods and grants too.
 - **Budgets** are per expense category: one recurring (`month` empty) plus optional one-month overrides.
 - **Transfers** are two transactions sharing `transfer_group_id`, moving money in opposite directions.
 - **Edit history** is written by database triggers (django-pghistory) into `*Event` tables.
-- **Secrets stored in the database** use `casharoo.fields.EncryptedTextField`.
+- **Secrets stored in the database** use `spendroo.fields.EncryptedTextField`.
 - The **database role** must not be a PostgreSQL superuser in production; superusers skip row-level security.

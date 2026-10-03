@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from casharoo.money import format_money
+from spendroo.money import format_money
 from .models import (
     CashBook, CashBookAdditionalMember, EntryCategory, 
     PaymentMethod, Entry, EntryBills, EntryExtraFields

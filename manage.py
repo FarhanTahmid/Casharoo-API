@@ -10,13 +10,13 @@ def main():
     load_dotenv()
     
     if os.environ.get('PROJECT_ENVIRONMENT')=='development':
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'casharoo.settings.dev')
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'spendroo.settings.dev')
     elif os.environ.get('PROJECT_ENVIRONMENT')=='production':
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'casharoo.settings.prod')
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'spendroo.settings.prod')
     elif os.environ.get('PROJECT_ENVIRONMENT')=='test':
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'casharoo.settings.test')
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'spendroo.settings.test')
     else:
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'casharoo.settings.dev')
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'spendroo.settings.dev')
 
     try:
         from django.core.management import execute_from_command_line
