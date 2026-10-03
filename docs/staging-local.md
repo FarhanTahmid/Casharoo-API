@@ -70,6 +70,7 @@ testers paste it again (that signs them out; their data is on the server).
 - `STAGING_TUNNEL=1` adds `.trycloudflare.com` to `ALLOWED_HOSTS` and
   `CSRF_TRUSTED_ORIGINS`; `TRUSTED_PROXY_COUNT=1` trusts cloudflared's
   `X-Forwarded-Proto`, so HTTPS redirects and secure cookies behave as in production.
-- Later: a named tunnel on the real domain (`cloudflared tunnel create`, a DNS
-  route for `staging-api.<domain>`) gives a fixed address, and then the
-  app's `config/staging.json` can point at it directly.
+- Later: a named tunnel on spendroo.com (`cloudflared tunnel create`, a DNS
+  route for `staging-api.spendroo.com`) gives a fixed address, and then the
+  app's `config/staging.json` (already set to that address) works without the
+  Server override. Add the host to `ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS`.
