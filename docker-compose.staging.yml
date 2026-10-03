@@ -1,0 +1,33 @@
+# Staging on this machine: production settings, reachable through a Cloudflare tunnel.
+#   cp .env.staging.example .env.staging   (fill it in)
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+# or scripts/staging-up.ps1, which also starts the tunnel. See docs/staging-local.md.
+services:
+  db:
+    volumes:
+      - pgdata-staging:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+
+  web: &staging
+    env_file: .env.staging
+    environment: &staging-env
+      PROJECT_ENVIRONMENT: production
+      PROD_DATABASE_HOST: db
+      PROD_DATABASE_PORT: "5432"
+      PROD_DATABASE_NAME: casharoo
+      PROD_DATABASE_USER: casharoo
+      PROD_DATABASE_PASSWORD: ${APP_DB_PASSWORD:-casharoo}
+      # cloudflared is the one proxy in front and says the visitor used HTTPS
+      TRUSTED_PROXY_COUNT: "1"
+      STAGING_TUNNEL: "1"
+      # gunicorn: accept X-Forwarded-* from the Docker gateway cloudflared arrives through
+      FORWARDED_ALLOW_IPS: "*"
+    ports:
+      - "127.0.0.1:8000:8000"   # only the tunnel reaches it, not the LAN
+
+  worker:
+    env_file: .env.staging
+    environment: *staging-env
+
+volumes:
+  pgdata-staging:

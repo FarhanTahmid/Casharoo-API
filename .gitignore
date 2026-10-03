@@ -141,3 +141,6 @@ GitHub.sublime-settings
 # Build output
 staticfiles/
 openapi.yml
+
+# Staging secrets (copy from .env.staging.example)
+.env.staging

@@ -23,6 +23,12 @@ CSRF_TRUSTED_ORIGINS = config(
     cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
 )
 
+# Staging on a developer machine behind `cloudflared tunnel --url`: the public
+# hostname is random and changes on every run (see docs/staging-local.md)
+if config('STAGING_TUNNEL', default=False, cast=bool):
+    ALLOWED_HOSTS += ['.trycloudflare.com']
+    CSRF_TRUSTED_ORIGINS += ['https://*.trycloudflare.com']
+
 # Database
 DATABASES = {'default': database_from_env('PROD')}
 
