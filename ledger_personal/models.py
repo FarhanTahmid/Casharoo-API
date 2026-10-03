@@ -1,4 +1,5 @@
 import pghistory
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 
@@ -102,28 +103,60 @@ class Transaction(WorkspaceOwnedModel):
     def get_parent_workspace_id(self):
         return self.account.workspace_id
 
+    def clean(self):
+        # A transfer is two rows sharing transfer_group_id: money leaves one
+        # account and arrives in another. Each leg is pushed on its own, so the
+        # pair is checked against whichever leg is already stored.
+        if self.kind != 'transfer' or self.transfer_group_id is None:
+            return
+        others = Transaction.objects.filter(transfer_group_id=self.transfer_group_id).exclude(id=self.id)
+        if others.count() >= 2:
+            raise ValidationError('A transfer has exactly two legs.')
+        for other in others:
+            if other.workspace_id != self.workspace_id:
+                raise ValidationError('Both legs of a transfer must be in the same workspace.')
+            if (other.amount_minor > 0) == (self.amount_minor > 0):
+                raise ValidationError('The legs of a transfer must move money in opposite directions.')
+
     def save(self, *args, **kwargs):
         self.currency = self.account.currency
         super().save(*args, **kwargs)
 
 
 class Budget(WorkspaceOwnedModel):
-    """Monthly spending limit for one expense category."""
+    """
+    Spending limit for one expense category. With no month it applies to
+    every month; with a month (its first day) it overrides that month only.
+    """
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='budgets')
     amount_minor = models.BigIntegerField()
     currency = models.CharField(max_length=3, default='BDT')
+    month = models.DateField(null=True, blank=True)
 
     class Meta:
         ordering = ['created_at']
         constraints = [
             models.CheckConstraint(condition=Q(amount_minor__gt=0), name='budget_amount_positive'),
+            models.CheckConstraint(condition=Q(month__isnull=True) | Q(month__day=1), name='budget_month_first_day'),
             models.UniqueConstraint(
-                fields=['category'], condition=Q(deleted_at__isnull=True), name='one_budget_per_category'
+                fields=['category'], condition=Q(deleted_at__isnull=True, month__isnull=True),
+                name='one_recurring_budget_per_category',
+            ),
+            models.UniqueConstraint(
+                fields=['category', 'month'], condition=Q(deleted_at__isnull=True, month__isnull=False),
+                name='one_budget_per_category_month',
             ),
         ]
 
     def __str__(self):
-        return f"{self.category.name}: {self.amount_minor} {self.currency}"
+        period = self.month.strftime('%Y-%m') if self.month else 'monthly'
+        return f"{self.category.name} {period}: {self.amount_minor} {self.currency}"
 
     def get_parent_workspace_id(self):
         return self.category.workspace_id
+
+    def clean(self):
+        if self.month is not None and self.month.day != 1:
+            raise ValidationError({'month': 'Use the first day of the month.'})
+        if self.category_id is not None and self.category.kind != 'expense':
+            raise ValidationError({'category': 'Budgets apply to expense categories only.'})

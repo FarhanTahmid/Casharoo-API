@@ -3,11 +3,12 @@ from .models import Workspace, Membership
 from .tenancy import add_workspace_to_context
 
 
-def create_workspace(owner, name, kind=Workspace.KIND_BUSINESS, default_currency='BDT'):
+def create_workspace(owner, name, kind=Workspace.KIND_BUSINESS, default_currency='BDT', workspace_id=None):
     """Create a workspace together with its owner membership."""
+    extra = {'id': workspace_id} if workspace_id else {}
     with transaction.atomic():
         workspace = Workspace.objects.create(
-            owner=owner, name=name, kind=kind, default_currency=default_currency
+            owner=owner, name=name, kind=kind, default_currency=default_currency, **extra
         )
         Membership.objects.create(workspace=workspace, user=owner, role=Membership.ROLE_OWNER)
     add_workspace_to_context(workspace.id)
@@ -30,8 +31,22 @@ def workspaces_for(user):
 
 
 # (days ago, entry type, amount in major units, title, category, payment method)
+# About two months, so reports and month-over-month views have something to show
 DEMO_ENTRIES = [
-    (13, 'cash_in', 12000, 'Opening cash', 'Income', 'Cash'),
+    (56, 'cash_in', 15000, 'Opening cash', 'Income', 'Cash'),
+    (54, 'cash_out', 6200, 'Stock purchase', 'Other', 'Bank Transfer'),
+    (50, 'cash_in', 3600, 'Counter sales', 'Income', 'Cash'),
+    (47, 'cash_in', 2100, 'Nagad sales', 'Income', 'Nagad'),
+    (44, 'cash_out', 8000, 'Shop rent', 'Housing', 'Bank Transfer'),
+    (41, 'cash_out', 720, 'Electricity bill', 'Utilities', 'bKash'),
+    (38, 'cash_in', 4800, 'Wholesale order', 'Income', 'Bank Transfer'),
+    (35, 'cash_out', 2500, 'Staff wages', 'Personal', 'Cash'),
+    (31, 'cash_out', 450, 'Packaging', 'Household Items/Supplies', 'Cash'),
+    (28, 'cash_in', 3300, 'Counter sales', 'Income', 'Cash'),
+    (24, 'cash_out', 1200, 'Delivery van fuel', 'Transportation', 'Cash'),
+    (20, 'cash_in', 2650, 'bKash sales', 'Income', 'bKash'),
+    (16, 'cash_out', 5400, 'Stock purchase', 'Other', 'Bank Transfer'),
+    (13, 'cash_in', 3000, 'Counter sales', 'Income', 'Cash'),
     (12, 'cash_out', 4500, 'Stock purchase', 'Other', 'Cash'),
     (11, 'cash_in', 3200, 'Counter sales', 'Income', 'Cash'),
     (10, 'cash_in', 1850, 'bKash sales', 'Income', 'bKash'),

@@ -1,6 +1,6 @@
-from rest_framework import viewsets, mixins, status
+from rest_framework import serializers, viewsets, mixins, status
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -28,6 +28,19 @@ class WorkspaceViewSet(TenantScopedMixin,
         return workspaces_for(self.request.user)
 
     def create(self, request, *args, **kwargs):
+        """
+        The app may send its own `id`. Sending the same id again returns the
+        workspace already made (200), so a retry after a lost response cannot
+        create a second business.
+        """
+        workspace_id = None
+        if request.data.get('id') is not None:
+            workspace_id = serializers.UUIDField().run_validation(request.data['id'])
+            existing = Workspace.all_objects.filter(id=workspace_id).first()
+            if existing is not None:
+                if existing.owner_id != request.user.id or existing.deleted_at is not None:
+                    raise ValidationError({'id': 'This id is already in use.'})
+                return Response(self.get_serializer(existing).data, status=status.HTTP_200_OK)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         workspace = create_workspace(
@@ -35,6 +48,7 @@ class WorkspaceViewSet(TenantScopedMixin,
             name=serializer.validated_data['name'],
             kind=Workspace.KIND_BUSINESS,
             default_currency=serializer.validated_data.get('default_currency', 'BDT'),
+            workspace_id=workspace_id,
         )
         return Response(self.get_serializer(workspace).data, status=status.HTTP_201_CREATED)
 

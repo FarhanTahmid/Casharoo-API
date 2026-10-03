@@ -8,6 +8,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serial
 from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from workspaces.models import Workspace
@@ -78,6 +79,9 @@ class PullView(TenantScopedMixin, APIView):
     grouped by table. Call again with `next_since` while `has_more` is true.
     """
     permission_classes = [IsAuthenticated]
+    # Background sync runs often; its own budget keeps it from using up the user's
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'sync'
 
     @extend_schema(
         parameters=[
@@ -149,6 +153,9 @@ class PushView(TenantScopedMixin, APIView):
     later arrival wins. Deletes win over edits.
     """
     permission_classes = [IsAuthenticated]
+    # Background sync runs often; its own budget keeps it from using up the user's
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'sync'
 
     @extend_schema(request=_push_request, responses=_push_response)
     def post(self, request):

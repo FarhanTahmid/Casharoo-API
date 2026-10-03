@@ -127,9 +127,27 @@ class ProfileTests(AuthTestCase):
         self.assertEqual((user.first_name, user.email), ('Alice', 'alice@example.com'))
 
 
+class OnboardingTests(AuthTestCase):
+    def test_onboarding_choice_is_kept_on_the_server(self):
+        user = AppUser.objects.create_user(email='alice@example.com', password=PASSWORD)
+        self.client.force_authenticate(user)
+        profile = self.client.get('/api/v1/me/').json()
+        self.assertEqual((profile['onboarded_at'], profile['primary_mode']), (None, ''))
+
+        response = self.client.patch(
+            '/api/v1/me/', {'onboarded_at': '2026-10-03T10:00:00Z', 'primary_mode': 'business'}, format='json'
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        profile = self.client.get('/api/v1/me/').json()
+        self.assertTrue(profile['onboarded_at'].startswith('2026-10-03'))
+        self.assertEqual(profile['primary_mode'], 'business')
+        self.assertEqual(self.client.patch('/api/v1/me/', {'primary_mode': 'galaxy'}).status_code, 400)
+
+
 class SchemaTests(AuthTestCase):
     def test_health_and_openapi_schema(self):
         self.assertEqual(self.client.get('/health/').json(), {'status': 'ok'})
+        self.assertEqual(self.client.get('/health/?db=1').json(), {'status': 'ok', 'database': 'ok'})
         response = self.client.get('/api/v1/schema/')
         self.assertEqual(response.status_code, 200)
         self.assertIn('/api/v1/cashbooks/', response.data['paths'])

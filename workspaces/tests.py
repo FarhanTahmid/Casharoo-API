@@ -188,3 +188,26 @@ class WorkspaceAPITests(TestCase):
         Membership.objects.create(workspace=workspace, user=self.alice, role=Membership.ROLE_STAFF)
         response = self.client.patch(f'/api/v1/workspaces/{workspace.id}/', {'name': 'Hijacked'})
         self.assertEqual(response.status_code, 403)
+
+    def test_create_with_client_id_is_idempotent(self):
+        workspace_id = '0192f3a1-7b2c-7d4e-8f00-123456789abc'
+        first = self.client.post('/api/v1/workspaces/', {'id': workspace_id, 'name': 'Shop'})
+        again = self.client.post('/api/v1/workspaces/', {'id': workspace_id, 'name': 'Shop'})
+        self.assertEqual((first.status_code, again.status_code), (201, 200))
+        self.assertEqual(first.data['id'], again.data['id'])
+        self.assertEqual(Workspace.objects.filter(owner=self.alice, kind='business').count(), 1)
+
+        bob = APIClient()
+        bob.force_authenticate(self.bob)
+        self.assertEqual(bob.post('/api/v1/workspaces/', {'id': workspace_id, 'name': 'Mine'}).status_code, 400)
+        self.assertEqual(self.client.post('/api/v1/workspaces/', {'id': 'nope', 'name': 'Shop'}).status_code, 400)
+
+
+class IdentifierTests(TestCase):
+    def test_new_rows_get_time_ordered_uuid7(self):
+        user = User.objects.create_user(email='alice@example.com', password='pass-12345')
+        first = create_workspace(owner=user, name='One')
+        second = create_workspace(owner=user, name='Two')
+        self.assertEqual((first.id.version, second.id.version), (7, 7))
+        # The leading 48 bits are the creation time in milliseconds
+        self.assertLessEqual(first.id.int >> 80, second.id.int >> 80)

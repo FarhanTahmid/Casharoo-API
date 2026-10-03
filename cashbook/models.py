@@ -1,8 +1,8 @@
 import pghistory
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.core.validators import FileExtensionValidator
-from django.db.models import Q, Sum
+from django.db.models import F, Q, Sum
 
 from workspaces.models import AliveManager, Membership, WorkspaceOwnedModel
 
@@ -70,6 +70,16 @@ class CashBook(WorkspaceOwnedModel):
             cash_out=Sum('amount_minor', filter=Q(entry_type='cash_out')),
         )
         return totals['cash_in'] or 0, totals['cash_out'] or 0
+
+    def soft_delete(self):
+        """Tombstone the book and everything in it, so a pull carries every deletion."""
+        with transaction.atomic():
+            super().soft_delete()
+            stamp = {'deleted_at': self.deleted_at, 'updated_at': self.deleted_at, 'version': F('version') + 1}
+            for model in (Entry, EntryCategory, PaymentMethod, CashBookAdditionalMember):
+                model.all_objects.filter(cashbook=self, deleted_at__isnull=True).update(**stamp)
+            for model in (EntryBills, EntryExtraFields):
+                model.all_objects.filter(entry__cashbook=self, deleted_at__isnull=True).update(**stamp)
 
     def get_balance(self):
         """Calculate current balance in minor units"""

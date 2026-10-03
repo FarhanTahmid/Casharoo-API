@@ -1,8 +1,9 @@
-import uuid
 import pghistory
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+
+from casharoo.ids import uuid7
 
 
 class AliveManager(models.Manager):
@@ -15,11 +16,11 @@ class AliveManager(models.Manager):
 class SyncModel(models.Model):
     """
     Base for every row a client can sync.
-    - id: UUID, so clients can create rows offline
-    - version: bumped on every save, used for optimistic concurrency
+    - id: UUIDv7, so clients can create rows offline and ids sort by age
+    - version: bumped on every save
     - deleted_at: tombstone; rows are never hard-deleted by the API
     """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid7, editable=False)
     version = models.PositiveIntegerField(default=1, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

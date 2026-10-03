@@ -5,9 +5,9 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from cashbook.models import CashBook, CashBookAdditionalMember, Entry, EntryCategory
-from ledger_personal.models import Account, Category, Transaction
+from ledger_personal.models import Account, Budget, Category, Transaction
 from workspaces.models import Membership
-from workspaces.services import create_workspace, get_personal_workspace
+from workspaces.services import DEMO_ENTRIES, create_workspace, get_personal_workspace
 from workspaces.tests import UnprivilegedRoleMixin
 
 User = get_user_model()
@@ -159,6 +159,92 @@ class PushTests(SyncTestCase):
         self.assertEqual(sum(t.amount_minor for t in Transaction.objects.filter(transfer_group_id=group)), 0)
 
 
+class BudgetSyncTests(SyncTestCase):
+    def setUp(self):
+        super().setUp()
+        self.food = Category.objects.get(workspace=self.personal, name='Food')
+
+    def budget(self, month=None, amount=500000, category=None):
+        data = {'category_id': str((category or self.food).id), 'amount_minor': amount, 'currency': 'BDT'}
+        if month is not None:
+            data['month'] = month
+        return self.upsert('budgets', **data)
+
+    def test_month_override_lives_beside_the_recurring_budget(self):
+        results = self.push(
+            self.alice_client, self.personal,
+            self.budget(), self.budget('2026-10-01', amount=800000),
+            # One override per month, one recurring budget per category
+            self.budget('2026-10-01', amount=1), self.budget(amount=1),
+        )
+        self.assertEqual([r['status'] for r in results], ['applied', 'applied', 'rejected', 'rejected'])
+        self.assertEqual(str(results[1]['row']['month']), '2026-10-01')
+        self.assertEqual(Budget.objects.filter(category=self.food).count(), 2)
+
+    def test_month_must_be_a_first_day_and_category_an_expense(self):
+        salary = Category.objects.get(workspace=self.personal, name='Salary')
+        results = self.push(
+            self.alice_client, self.personal, self.budget('2026-10-15'), self.budget(category=salary),
+        )
+        self.assertEqual([r['error']['code'] for r in results], ['invalid', 'invalid'])
+
+    def test_deleted_override_frees_the_month(self):
+        first = self.budget('2026-11-01')
+        self.push(self.alice_client, self.personal, first, self.delete('budgets', first['row_id']))
+        results = self.push(self.alice_client, self.personal, self.budget('2026-11-01'))
+        self.assertEqual(results[0]['status'], 'applied')
+
+
+class TransferSyncTests(SyncTestCase):
+    def setUp(self):
+        super().setUp()
+        self.cash = Account.objects.get(workspace=self.personal)
+        self.savings = Account.objects.create(workspace=self.personal, name='Savings', kind='savings')
+
+    def leg(self, account, amount, group):
+        return self.upsert('transactions', account_id=str(account.id), kind='transfer', amount_minor=amount,
+                           transfer_group_id=group, occurred_on='2026-10-01')
+
+    def test_a_transfer_has_two_legs_moving_opposite_ways(self):
+        group, other_group = new_id(), new_id()
+        results = self.push(
+            self.alice_client, self.personal,
+            self.leg(self.cash, -1000, group), self.leg(self.savings, 1000, group),
+            self.leg(self.savings, 1000, group),  # a third leg
+            self.leg(self.cash, -500, other_group), self.leg(self.savings, -500, other_group),  # same direction
+        )
+        self.assertEqual([r['status'] for r in results], ['applied', 'applied', 'rejected', 'applied', 'rejected'])
+        self.assertEqual(results[2]['error']['code'], 'invalid')
+
+    def test_editing_a_leg_keeps_the_pair_consistent(self):
+        group = new_id()
+        out_leg, in_leg = self.leg(self.cash, -1000, group), self.leg(self.savings, 1000, group)
+        self.push(self.alice_client, self.personal, out_leg, in_leg)
+        results = self.push(
+            self.alice_client, self.personal,
+            self.upsert('transactions', out_leg['row_id'], amount_minor=-2000),
+            self.upsert('transactions', in_leg['row_id'], amount_minor=2000),
+            self.upsert('transactions', in_leg['row_id'], amount_minor=-2000),
+        )
+        self.assertEqual([r['status'] for r in results], ['applied', 'applied', 'rejected'])
+
+
+class CashBookCascadeTests(SyncTestCase):
+    def test_deleting_a_book_tombstones_its_rows_for_every_device(self):
+        book, entry, _ = self.push_book_with_entry()
+        cursor = self.pull(self.alice_client, self.shop)['next_since']
+        self.push(self.alice_client, self.shop, self.delete('cashbooks', book['row_id']))
+
+        changes = self.pull(self.alice_client, self.shop, since=cursor)['changes']
+        self.assertEqual([str(row['id']) for row in changes['cashbooks']], [book['row_id']])
+        self.assertEqual([str(row['id']) for row in changes['entries']], [entry['row_id']])
+        tombstones = [row for table in ('entries', 'entry_categories', 'payment_methods') for row in changes[table]]
+        self.assertTrue(tombstones)
+        self.assertTrue(all(row['deleted_at'] for row in tombstones))
+        self.assertFalse(Entry.objects.filter(cashbook_id=book['row_id']).exists())
+        self.assertFalse(EntryCategory.objects.filter(cashbook_id=book['row_id']).exists())
+
+
 class PushPermissionTests(SyncTestCase):
     def test_outsider_cannot_push_or_pull(self):
         self.assertEqual(self.bob_client.get(PULL, {'workspace': str(self.shop.id)}).status_code, 404)
@@ -289,7 +375,7 @@ class DemoBusinessTests(SyncTestCase):
         demo_id = response.data['id']
         changes = self.alice_client.get(PULL, {'workspace': demo_id}).data['changes']
         self.assertEqual(len(changes['cashbooks']), 1)
-        self.assertEqual(len(changes['entries']), 12)
+        self.assertEqual(len(changes['entries']), len(DEMO_ENTRIES))
 
         self.assertEqual(self.bob_client.delete(f'/api/v1/workspaces/{demo_id}/').status_code, 404)
         self.assertEqual(self.alice_client.delete(f'/api/v1/workspaces/{demo_id}/').status_code, 204)

@@ -5,11 +5,20 @@ from django.contrib import admin
 from django.urls import path,include
 from django.conf.urls.static import static
 from django.conf import settings
+from django.db import DatabaseError, connection
 from django.http import JsonResponse
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 
 def health(request):
+    """Liveness; with ?db=1 also checks the database answers."""
+    if request.GET.get('db'):
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT 1')
+        except DatabaseError:
+            return JsonResponse({'status': 'error', 'database': 'unavailable'}, status=503)
+        return JsonResponse({'status': 'ok', 'database': 'ok'})
     return JsonResponse({'status': 'ok'})
 
 

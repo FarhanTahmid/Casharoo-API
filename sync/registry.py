@@ -145,7 +145,7 @@ class TransactionTable(WorkspaceLevelTable):
 
 
 class BudgetTable(WorkspaceLevelTable):
-    writable = ['category_id', 'amount_minor', 'currency']
+    writable = ['category_id', 'amount_minor', 'currency', 'month']
     references = {'category_id': (Category, None)}
 
 

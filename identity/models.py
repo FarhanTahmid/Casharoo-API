@@ -90,10 +90,19 @@ class AppUser(AbstractBaseUser,PermissionsMixin):
 
 
 class UserSettings(models.Model):
+    MODE_CHOICES = [
+        ('personal', 'Personal'),
+        ('business', 'Business'),
+    ]
+
     user = models.OneToOneField(AppUser, on_delete=models.CASCADE, related_name='settings')
-    
+
     get_auto_reports=models.BooleanField(default=False)
-    
+    # Set when the user makes the individual-or-business choice, so a
+    # reinstall or a second phone skips onboarding
+    onboarded_at = models.DateTimeField(null=True, blank=True)
+    primary_mode = models.CharField(max_length=10, choices=MODE_CHOICES, blank=True, default='')
+
     class Meta:
         verbose_name = 'User Setting'
         verbose_name_plural = 'User Settings'
