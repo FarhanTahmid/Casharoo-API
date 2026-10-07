@@ -189,6 +189,18 @@ class WorkspaceAPITests(TestCase):
         response = self.client.patch(f'/api/v1/workspaces/{workspace.id}/', {'name': 'Hijacked'})
         self.assertEqual(response.status_code, 403)
 
+    def test_owner_can_change_default_currency(self):
+        workspace = create_workspace(owner=self.alice, name='Alice Shop')
+        response = self.client.patch(f'/api/v1/workspaces/{workspace.id}/', {'default_currency': 'usd'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['default_currency'], 'USD')
+        self.assertEqual(self.client.patch(f'/api/v1/workspaces/{workspace.id}/', {'default_currency': 'dollars'}).status_code, 400)
+
+        staffed = create_workspace(owner=self.bob, name='Bob Shop')
+        Membership.objects.create(workspace=staffed, user=self.alice, role=Membership.ROLE_STAFF)
+        response = self.client.patch(f'/api/v1/workspaces/{staffed.id}/', {'default_currency': 'USD'})
+        self.assertEqual(response.status_code, 403)
+
     def test_create_with_client_id_is_idempotent(self):
         workspace_id = '0192f3a1-7b2c-7d4e-8f00-123456789abc'
         first = self.client.post('/api/v1/workspaces/', {'id': workspace_id, 'name': 'Shop'})
