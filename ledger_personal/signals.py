@@ -15,6 +15,6 @@ def seed_personal_workspace(sender, instance, created, **kwargs):
     add_workspace_to_context(instance.id)
     Account.objects.create(workspace=instance, name='Cash', kind='cash', currency=instance.default_currency)
     Category.objects.bulk_create(
-        [Category(workspace=instance, name=name, kind='expense') for name in Category.DEFAULT_EXPENSE]
-        + [Category(workspace=instance, name=name, kind='income') for name in Category.DEFAULT_INCOME]
+        [Category(workspace=instance, name=name, kind='expense', is_default=True) for name in Category.DEFAULT_EXPENSE]
+        + [Category(workspace=instance, name=name, kind='income', is_default=True) for name in Category.DEFAULT_INCOME]
     )

@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django.db import transaction
 from django.db.models import F
 
+from billing.api.guards import CashbookPlanGuard
 from workspaces.tenancy import TenantScopedMixin
 from django.shortcuts import get_object_or_404
 
@@ -13,7 +14,7 @@ from ..models import PaymentMethod,CashBook
 from ..serializers import PaymentMethodSerializer
 
 
-class PaymentMethodViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+class PaymentMethodViewSet(CashbookPlanGuard, TenantScopedMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing payment methods.
     Supports CRUD with soft delete and bulk creation.

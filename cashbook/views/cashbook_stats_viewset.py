@@ -8,6 +8,8 @@ from django.db.models import Sum, Count, Q
 
 from datetime import datetime
 
+from billing import gates
+from billing.catalog.keys import F
 from workspaces.tenancy import TenantScopedMixin
 
 from ..models import CashBook
@@ -147,12 +149,13 @@ class CashBookStatsViewSet(TenantScopedMixin, viewsets.ViewSet):
                 {'error': 'You do not have permission to view this cashbook'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+        gates.require(cashbook.workspace, F.CASHBOOK_REPORT_EXPORT)
+
         # Get period parameters
         period = request.query_params.get('period', 'monthly')
         start_date_str = request.query_params.get('start_date')
         end_date_str = request.query_params.get('end_date')
-        
+
         # Parse dates
         try:
             if period == 'custom':
@@ -170,12 +173,12 @@ class CashBookStatsViewSet(TenantScopedMixin, viewsets.ViewSet):
                 {'error': f'Invalid parameters: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # Get entries for the period
         entries = cashbook.entry_set.filter(
             entry_date__range=[start_date, end_date]
         ).select_related('category', 'payment_method', 'created_by').order_by('entry_date')
-        
+
         # Generate PDF
         pdf_buffer = generate_pdf_report(cashbook, entries, start_date, end_date)
         
@@ -202,12 +205,13 @@ class CashBookStatsViewSet(TenantScopedMixin, viewsets.ViewSet):
                 {'error': 'You do not have permission to view this cashbook'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+        gates.require(cashbook.workspace, F.CASHBOOK_REPORT_EXPORT)
+
         # Get period parameters
         period = request.query_params.get('period', 'monthly')
         start_date_str = request.query_params.get('start_date')
         end_date_str = request.query_params.get('end_date')
-        
+
         # Parse dates
         try:
             if period == 'custom':
@@ -225,12 +229,12 @@ class CashBookStatsViewSet(TenantScopedMixin, viewsets.ViewSet):
                 {'error': f'Invalid parameters: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
         # Get entries for the period
         entries = cashbook.entry_set.filter(
             entry_date__range=[start_date, end_date]
         ).select_related('category', 'payment_method', 'created_by').order_by('entry_date')
-        
+
         # Generate Excel
         excel_buffer = generate_excel_report(cashbook, entries, start_date, end_date)
         

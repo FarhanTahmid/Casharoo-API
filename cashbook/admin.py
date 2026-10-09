@@ -1,4 +1,5 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin, TabularInline
 from django.utils.html import format_html
 from spendroo.money import format_money
 from .models import (
@@ -8,7 +9,7 @@ from .models import (
 
 
 @admin.register(CashBook)
-class CashBookAdmin(admin.ModelAdmin):
+class CashBookAdmin(ModelAdmin):
     list_display = ['id','book_name', 'workspace', 'currency', 'get_balance_display', 'created_at', 'updated_at']
     list_filter = ['currency', 'created_at', 'updated_at']
     search_fields = ['book_name', 'workspace__name', 'workspace__owner__email']
@@ -43,7 +44,7 @@ class CashBookAdmin(admin.ModelAdmin):
 
 
 @admin.register(CashBookAdditionalMember)
-class CashBookAdditionalMemberAdmin(admin.ModelAdmin):
+class CashBookAdditionalMemberAdmin(ModelAdmin):
     list_display = ['member', 'cashbook', 'role', 'added_by', 'created_at']
     list_filter = ['role', 'created_at']
     search_fields = ['member__email', 'member__username', 'cashbook__book_name']
@@ -60,7 +61,7 @@ class CashBookAdditionalMemberAdmin(admin.ModelAdmin):
 
 
 @admin.register(EntryCategory)
-class EntryCategoryAdmin(admin.ModelAdmin):
+class EntryCategoryAdmin(ModelAdmin):
     list_display = ['category_name', 'cashbook', 'is_default', 'created_at']
     list_filter = ['is_default', 'created_at']
     search_fields = ['category_name', 'cashbook__book_name']
@@ -77,7 +78,7 @@ class EntryCategoryAdmin(admin.ModelAdmin):
 
 
 @admin.register(PaymentMethod)
-class PaymentMethodAdmin(admin.ModelAdmin):
+class PaymentMethodAdmin(ModelAdmin):
     list_display = ['payment_method_name', 'cashbook', 'is_default', 'created_at']
     list_filter = ['is_default', 'created_at']
     search_fields = ['payment_method_name', 'cashbook__book_name']
@@ -93,14 +94,14 @@ class PaymentMethodAdmin(admin.ModelAdmin):
     )
 
 
-class EntryBillsInline(admin.TabularInline):
+class EntryBillsInline(TabularInline):
     model = EntryBills
     extra = 0
     readonly_fields = ['id', 'created_at']
     fields = ['bill_file', 'created_at']
 
 
-class EntryExtraFieldsInline(admin.TabularInline):
+class EntryExtraFieldsInline(TabularInline):
     model = EntryExtraFields
     extra = 0
     readonly_fields = ['id']
@@ -108,7 +109,7 @@ class EntryExtraFieldsInline(admin.TabularInline):
 
 
 @admin.register(Entry)
-class EntryAdmin(admin.ModelAdmin):
+class EntryAdmin(ModelAdmin):
     list_display = ['title', 'cashbook', 'entry_type', 'amount_minor', 'currency', 'category', 'payment_method', 'entry_date', 'created_by']
     list_filter = ['entry_type', 'source', 'entry_date', 'created_at']
     search_fields = ['title', 'remarks', 'cashbook__book_name', 'created_by__email']
@@ -138,7 +139,7 @@ class EntryAdmin(admin.ModelAdmin):
 
 
 @admin.register(EntryBills)
-class EntryBillsAdmin(admin.ModelAdmin):
+class EntryBillsAdmin(ModelAdmin):
     list_display = ['id', 'entry', 'bill_file', 'created_at']
     list_filter = ['created_at']
     search_fields = ['entry__title', 'entry__cashbook__book_name']
@@ -150,7 +151,7 @@ class EntryBillsAdmin(admin.ModelAdmin):
 
 
 @admin.register(EntryExtraFields)
-class EntryExtraFieldsAdmin(admin.ModelAdmin):
+class EntryExtraFieldsAdmin(ModelAdmin):
     list_display = ['field_name', 'field_value', 'entry']
     search_fields = ['field_name', 'field_value', 'entry__title']
     readonly_fields = ['id']

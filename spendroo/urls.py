@@ -27,6 +27,7 @@ api_v1_patterns = [
     path('workspaces/',include('workspaces.urls')),
     path('',include('cashbook.urls')),
     path('sync/',include('sync.urls')),
+    path('billing/',include('billing.api.urls')),
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
     path('docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='docs'),
 ]

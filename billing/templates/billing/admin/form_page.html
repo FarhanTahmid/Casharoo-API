@@ -1,0 +1,22 @@
+{% extends "billing/admin/page.html" %}
+{% load unfold %}
+
+{% block page %}
+    <div class="max-w-2xl">
+        {% component "unfold/components/card.html" %}
+            {% if intro %}
+                {% component "unfold/components/text.html" with class="mb-4" %}{{ intro }}{% endcomponent %}
+            {% endif %}
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% include "unfold/helpers/form_errors.html" with errors=form.non_field_errors %}
+                <div class="flex flex-col gap-4 mb-6">
+                    {% for field in form %}
+                        {% include "unfold/helpers/field.html" %}
+                    {% endfor %}
+                </div>
+                {% component "unfold/components/button.html" with submit=1 %}{{ submit_label|default:"Save" }}{% endcomponent %}
+            </form>
+        {% endcomponent %}
+    </div>
+{% endblock %}

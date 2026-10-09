@@ -1,9 +1,10 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 from .models import CRUDLog
 
 
 @admin.register(CRUDLog)
-class CRUDLogAdmin(admin.ModelAdmin):
+class CRUDLogAdmin(ModelAdmin):
     list_display = ('id','user', 'action', 'model_name', 'record_ids', 'timestamp')
     search_fields=('user__username','user__email','action','model_name')
     list_filter = ('action', 'model_name')

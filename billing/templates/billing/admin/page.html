@@ -1,0 +1,20 @@
+{% extends "admin/base.html" %}
+{% load i18n unfold %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block branding %}
+    {% include "unfold/helpers/site_branding.html" %}
+{% endblock %}
+
+{% block content %}
+    <div class="flex flex-row items-center gap-4 mb-6">
+        {% component "unfold/components/title.html" %}{{ title }}{% endcomponent %}
+        {% if back %}
+            <div class="ml-auto">
+                {% component "unfold/components/button.html" with href=back variant="default" icon="arrow_back" %}Back{% endcomponent %}
+            </div>
+        {% endif %}
+    </div>
+    {% block page %}{% endblock %}
+{% endblock %}

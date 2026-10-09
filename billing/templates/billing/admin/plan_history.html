@@ -1,0 +1,33 @@
+{% extends "billing/admin/page.html" %}
+{% load unfold %}
+
+{% block page %}
+    {% component "unfold/components/text.html" with class="mb-4" %}
+        Every change to what a plan gives, newest first. To undo changes, open the plan and choose "Restore from history".
+    {% endcomponent %}
+    <div class="bg-white border border-base-200 overflow-x-auto rounded-default shadow-xs dark:border-base-800 dark:bg-base-900">
+        <table class="border-spacing-none border-separate w-full">
+            <thead class="text-important">
+                <tr class="bg-base-50 dark:bg-base-900">
+                    {% for header in headers %}
+                        <th class="align-middle border-b border-base-200 font-semibold py-2 text-left whitespace-nowrap px-3 dark:border-base-800">{{ header }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for change in changes %}
+                    <tr>
+                        <td class="px-3 py-2 border-t border-base-200 whitespace-nowrap dark:border-base-800">{{ change.when|date:"Y-m-d H:i" }}</td>
+                        <td class="px-3 py-2 border-t border-base-200 dark:border-base-800">{{ change.who }}</td>
+                        <td class="px-3 py-2 border-t border-base-200 dark:border-base-800">{{ change.plan }}</td>
+                        <td class="px-3 py-2 border-t border-base-200 dark:border-base-800">{{ change.feature }}</td>
+                        <td class="px-3 py-2 border-t border-base-200 dark:border-base-800">{{ change.before }}</td>
+                        <td class="px-3 py-2 border-t border-base-200 font-semibold text-important dark:border-base-800">{{ change.after }}</td>
+                    </tr>
+                {% empty %}
+                    <tr><td colspan="6" class="px-3 py-2 text-center">No changes yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

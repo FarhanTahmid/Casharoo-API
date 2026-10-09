@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from billing.testing import grant_plan
 from cashbook.models import CashBook, CashBookAdditionalMember, Entry, EntryCategory
 from ledger_personal.models import Account, Budget, Category, Transaction
 from workspaces.models import Membership
@@ -30,6 +31,9 @@ class SyncTestCase(TestCase):
         self.bob_client.force_authenticate(self.bob)
         self.personal = get_personal_workspace(self.alice)
         self.shop = create_workspace(owner=self.alice, name='Shop')
+        # These tests are about how sync behaves, not about what a plan
+        # allows (billing/tests cover that), so the owner gets everything
+        grant_plan(self.alice, 'business')
 
     def push(self, client, workspace, *mutations):
         response = client.post(PUSH, {'workspace': str(workspace.id), 'mutations': list(mutations)}, format='json')

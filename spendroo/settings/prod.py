@@ -11,6 +11,10 @@ if not SECRET_KEY:
     raise ImproperlyConfigured('SECRET_KEY must be set in production.')
 if not config('FIELD_ENCRYPTION_KEYS', default=''):
     raise ImproperlyConfigured('FIELD_ENCRYPTION_KEYS must be set in production.')
+# Pretend purchases would let anyone give themselves a paid plan
+if config('BILLING_DEV_TOOLS', default=False, cast=bool):
+    raise ImproperlyConfigured('BILLING_DEV_TOOLS must not be set in production.')
+BILLING_DEV_TOOLS = False
 
 # Hosts
 ALLOWED_HOSTS = config(

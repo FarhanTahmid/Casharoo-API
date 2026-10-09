@@ -1,0 +1,8 @@
+{% extends "billing/admin/page.html" %}
+{% load unfold %}
+
+{% block page %}
+    {% component "unfold/components/card.html" %}
+        <pre class="overflow-x-auto text-xs">{{ body }}</pre>
+    {% endcomponent %}
+{% endblock %}

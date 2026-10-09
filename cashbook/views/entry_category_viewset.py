@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db.models import F
 
+from billing.api.guards import CashbookPlanGuard
 from workspaces.tenancy import TenantScopedMixin
 
 from ..models import(
@@ -16,7 +17,7 @@ from ..serializers import (
 )
 from ..permissions import CashBookAdminPermission
 
-class EntryCategoryViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+class EntryCategoryViewSet(CashbookPlanGuard, TenantScopedMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing entry categories.
     Supports CRUD with soft delete and bulk creation.

@@ -19,6 +19,8 @@ class SyncMutation(models.Model):
     status = models.CharField(max_length=10)
     error_code = models.CharField(max_length=40, blank=True, default='')
     error_detail = models.TextField(blank=True, default='')
+    # Machine-readable extras for the app, such as which plan limit refused it
+    error_meta = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

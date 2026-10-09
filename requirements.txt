@@ -15,6 +15,7 @@ django-countries==7.6.1
 django-pghistory==3.9.2
 django-pgtrigger==4.17.0
 django-resized==1.0.3
+django-unfold==0.108.0
 djangorestframework==3.18.1
 drf-nested-routers==0.95.3
 drf-spectacular==0.30.0

@@ -1,11 +1,12 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 from .models import Account, Budget, Category, Transaction
 
 SYNC_READONLY = ['id', 'workspace', 'version', 'server_seq', 'created_at', 'updated_at', 'deleted_at']
 
 
 @admin.register(Account)
-class AccountAdmin(admin.ModelAdmin):
+class AccountAdmin(ModelAdmin):
     list_display = ['name', 'kind', 'currency', 'workspace', 'is_archived']
     list_filter = ['kind', 'currency', 'is_archived']
     search_fields = ['name', 'workspace__owner__email']
@@ -13,15 +14,15 @@ class AccountAdmin(admin.ModelAdmin):
 
 
 @admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
-    list_display = ['name', 'kind', 'workspace']
-    list_filter = ['kind']
+class CategoryAdmin(ModelAdmin):
+    list_display = ['name', 'kind', 'is_default', 'workspace']
+    list_filter = ['kind', 'is_default']
     search_fields = ['name', 'workspace__owner__email']
-    readonly_fields = SYNC_READONLY
+    readonly_fields = SYNC_READONLY + ['is_default']
 
 
 @admin.register(Transaction)
-class TransactionAdmin(admin.ModelAdmin):
+class TransactionAdmin(ModelAdmin):
     list_display = ['occurred_on', 'kind', 'amount_minor', 'currency', 'account', 'category', 'source']
     list_filter = ['kind', 'source', 'occurred_on']
     search_fields = ['note', 'workspace__owner__email']
@@ -30,6 +31,6 @@ class TransactionAdmin(admin.ModelAdmin):
 
 
 @admin.register(Budget)
-class BudgetAdmin(admin.ModelAdmin):
+class BudgetAdmin(ModelAdmin):
     list_display = ['category', 'amount_minor', 'currency', 'workspace']
     readonly_fields = SYNC_READONLY

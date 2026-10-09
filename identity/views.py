@@ -10,6 +10,8 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from audit.utils.audit_utils import AuditLogMixin
+from billing import gates
+from workspaces.tenancy import TenantScopedMixin
 from . import services
 from .serializers import (
     AvatarUploadSerializer,
@@ -20,7 +22,11 @@ from .serializers import (
 from .usernames import suggestions, validate_username
 
 
-class MeView(generics.RetrieveUpdateAPIView):
+# The profile is the user's own; no plan limits it
+PROFILE_ONLY = gates.exempt('own profile')
+
+
+class MeView(TenantScopedMixin, generics.RetrieveUpdateAPIView):
     """
     Profile of the signed-in user.
 
@@ -28,8 +34,10 @@ class MeView(generics.RetrieveUpdateAPIView):
     reset and change, Google sign-in, MFA and session management are served by
     django-allauth's headless API under /_allauth/app/v1/.
     """
+    # Tenant-scoped because the entitlements in the answer count the user's own rows
     serializer_class = UserProfileSerializer
     permission_classes = [permissions.IsAuthenticated]
+    billing_gate = PROFILE_ONLY
 
     def get_object(self):
         return self.request.user
@@ -58,11 +66,12 @@ class UsernameCheckView(APIView):
         return Response(result)
 
 
-class ChangeUsernameView(AuditLogMixin, APIView):
+class ChangeUsernameView(TenantScopedMixin, AuditLogMixin, APIView):
     """Change the username. Needs the password, unless the account has none (Google sign-in)"""
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'profile_sensitive'
+    billing_gate = PROFILE_ONLY
 
     @extend_schema(request=ChangeUsernameSerializer, responses=UserProfileSerializer)
     def post(self, request):
@@ -81,13 +90,14 @@ class ChangeUsernameView(AuditLogMixin, APIView):
         return Response(UserProfileSerializer(request.user, context={'request': request}).data)
 
 
-class AvatarView(AuditLogMixin, APIView):
+class AvatarView(TenantScopedMixin, AuditLogMixin, APIView):
     """
     The signed-in user's profile picture. The app crops it; the server checks
     it is a real picture and stores a small square JPEG.
     """
     permission_classes = [permissions.IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
+    billing_gate = PROFILE_ONLY
 
     def get_throttles(self):
         if self.request.method in ('POST', 'DELETE'):

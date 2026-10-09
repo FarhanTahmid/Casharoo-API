@@ -1,0 +1,40 @@
+{% extends "billing/admin/page.html" %}
+{% load unfold %}
+
+{% block page %}
+    <div class="max-w-2xl">
+        {% component "unfold/components/card.html" %}
+            {% component "unfold/components/text.html" with class="mb-4" %}
+                Every change to what a plan gives is recorded. Pick a moment and {{ plan.name }} goes back to the
+                values it had then. You see the changes before anything is saved.
+            {% endcomponent %}
+            <form method="post" novalidate>
+                {% csrf_token %}
+                <div class="flex flex-col gap-4 mb-6">
+                    {% for field in form %}
+                        {% include "unfold/helpers/field.html" %}
+                    {% endfor %}
+                </div>
+
+                {% if preview is not None %}
+                    {% if preview %}
+                        <div class="mb-6">
+                            {% component "unfold/components/text.html" with class="font-semibold mb-2" %}
+                                This will change {{ preview|length }} value{{ preview|length|pluralize }} for everyone on {{ plan.name }}:
+                            {% endcomponent %}
+                            {% for line in preview %}
+                                {% component "unfold/components/text.html" %}{{ line }}{% endcomponent %}
+                            {% endfor %}
+                        </div>
+                        {% component "unfold/components/button.html" with submit=1 name="confirm" value="1" variant="danger" %}Restore{% endcomponent %}
+                    {% else %}
+                        {% component "unfold/components/text.html" with class="mb-4" %}
+                            Nothing to change: the plan is as it was then.
+                        {% endcomponent %}
+                    {% endif %}
+                {% endif %}
+                {% component "unfold/components/button.html" with submit=1 variant="default" %}Show what would change{% endcomponent %}
+            </form>
+        {% endcomponent %}
+    </div>
+{% endblock %}

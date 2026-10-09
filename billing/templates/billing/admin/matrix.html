@@ -1,0 +1,55 @@
+{% extends "billing/admin/page.html" %}
+{% load unfold %}
+
+{% block page %}
+    {% component "unfold/components/text.html" with class="mb-4" %}
+        What every plan gives, in one place. For a limit or a quota type a number, or ∞ for unlimited.
+        Saving applies to everyone on those plans at once, in the app after its next sync.
+    {% endcomponent %}
+
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="bg-white border border-base-200 overflow-x-auto rounded-default shadow-xs mb-6 dark:border-base-800 dark:bg-base-900">
+            <table class="border-spacing-none border-separate w-full">
+                <thead class="text-important">
+                    <tr class="bg-base-50 dark:bg-base-900">
+                        <th class="align-middle border-b border-base-200 font-semibold py-2 text-left px-3 dark:border-base-800">Feature</th>
+                        {% for plan in plans %}
+                            <th class="align-middle border-b border-base-200 font-semibold py-2 text-left whitespace-nowrap px-3 dark:border-base-800">
+                                {{ plan.name }}
+                                {% if plan.is_default %}<span class="text-subtle text-xs">default</span>{% endif %}
+                                {% if not plan.is_active %}<span class="text-subtle text-xs">inactive</span>{% endif %}
+                            </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in grid %}
+                        <tr>
+                            <td class="px-3 py-2 border-t border-base-200 dark:border-base-800">
+                                <div class="text-important font-semibold">{{ row.feature.name }}</div>
+                                <div class="text-subtle text-xs">
+                                    {{ row.feature.key }}{% if row.feature.unit %} · {{ row.feature.unit }}{% endif %}{% if not row.feature.is_system %} · app only{% endif %}
+                                </div>
+                            </td>
+                            {% for cell in row.cells %}
+                                <td class="px-3 py-2 border-t border-base-200 dark:border-base-800">
+                                    {% if row.is_flag %}
+                                        <input type="checkbox" name="{{ cell.name }}" value="on" class="{{ form_classes.checkbox }}"
+                                               {% if cell.value == "on" %}checked{% endif %} {% if not can_edit %}disabled{% endif %}>
+                                    {% else %}
+                                        <input type="text" name="{{ cell.name }}" value="{{ cell.value }}" inputmode="numeric"
+                                               class="{{ form_classes.text_input }} w-24" {% if not can_edit %}disabled{% endif %}>
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if can_edit %}
+            {% component "unfold/components/button.html" with submit=1 %}Save for everyone on these plans{% endcomponent %}
+        {% endif %}
+    </form>
+{% endblock %}

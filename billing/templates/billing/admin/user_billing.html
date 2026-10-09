@@ -1,0 +1,173 @@
+{% extends "billing/admin/page.html" %}
+{% load unfold %}
+
+{% block page %}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {% component "unfold/components/card.html" with title="Plan" %}
+            {% component "unfold/components/title.html" %}{{ entitlements.plan.name }}{% endcomponent %}
+            {% component "unfold/components/text.html" %}
+                {% if entitlements.source == "default" %}
+                    No subscription: this is the plan everyone starts on.
+                {% elif entitlements.source == "campaign" %}
+                    From the campaign "{{ entitlements.campaign_slug }}", while it runs.
+                {% else %}
+                    From: {{ source_label|lower }}.
+                {% endif %}
+                {% if entitlements.expires_at %}Until {{ entitlements.expires_at|date:"Y-m-d H:i" }}.{% elif entitlements.source != "default" %}No end date.{% endif %}
+                {% if entitlements.in_grace %}<strong>In its grace period: the payment is late.</strong>{% endif %}
+            {% endcomponent %}
+            {% component "unfold/components/text.html" with class="mt-4" %}
+                <a href="{{ user_change }}" class="text-primary-600">Open the user's account</a>
+            {% endcomponent %}
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title="Used this month" %}
+            {% for quota in quotas %}
+                {% if quota.total is None %}
+                    {% component "unfold/components/progress.html" with title=quota.feature.name description="unlimited" value=0 class="mb-4" %}{% endcomponent %}
+                {% else %}
+                    {% component "unfold/components/progress.html" with title=quota.feature.name value=quota.percent class="mb-1" %}{% endcomponent %}
+                    {% component "unfold/components/text.html" with class="mb-4 text-xs" %}
+                        {{ quota.used }} of {{ quota.total }}{% if quota.bonus %} (includes {{ quota.bonus }} extra){% endif %}
+                    {% endcomponent %}
+                {% endif %}
+            {% endfor %}
+            {% component "unfold/components/text.html" with class="text-xs" %}
+                Attachments: {{ storage_mb }} MB of {% if storage_limit is None %}unlimited{% else %}{{ storage_limit }} MB{% endif %}
+            {% endcomponent %}
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title="Locked after a downgrade" %}
+            {% for item in keep %}
+                {% component "unfold/components/text.html" with class="font-semibold" %}
+                    {{ item.feature.name }}{% if item.workspace %} in {{ item.workspace.name }}{% endif %}: keeps {{ item.limit }}
+                {% endcomponent %}
+                {% component "unfold/components/text.html" with class="text-xs" %}
+                    Editable: {{ item.kept|join:", " }}<br>
+                    Read-only: {{ item.locked|join:", " }}<br>
+                    {% if item.pending %}They have not chosen yet, so the oldest are kept.{% elif item.can_change_at %}They chose. They can change it from {{ item.can_change_at|date:"Y-m-d" }}.{% else %}They chose, and may change it now.{% endif %}
+                {% endcomponent %}
+                {% if can.reset_keep and not item.pending %}
+                    <form method="post" class="mb-4 mt-2">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="reset_keep">
+                        <input type="hidden" name="feature" value="{{ item.feature.key }}">
+                        <input type="hidden" name="scope" value="{{ item.scope }}">
+                        {% component "unfold/components/button.html" with submit=1 variant="default" size="sm" %}Let them choose again{% endcomponent %}
+                    </form>
+                {% endif %}
+            {% empty %}
+                {% component "unfold/components/text.html" %}Nothing is locked: everything they have fits their plan.{% endcomponent %}
+            {% endfor %}
+        {% endcomponent %}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {% if can.grant %}
+            {% component "unfold/components/card.html" with title="Grant a plan" %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="grant">
+                    {% include "unfold/helpers/form_errors.html" with errors=forms.grant.non_field_errors %}
+                    {% for field in forms.grant %}{% include "unfold/helpers/field.html" %}{% endfor %}
+                    {% component "unfold/components/button.html" with submit=1 %}Grant{% endcomponent %}
+                </form>
+            {% endcomponent %}
+        {% endif %}
+
+        {% if can.override %}
+            {% component "unfold/components/card.html" with title="Change one feature for this user" %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="override">
+                    {% include "unfold/helpers/form_errors.html" with errors=forms.override.non_field_errors %}
+                    {% for field in forms.override %}{% include "unfold/helpers/field.html" %}{% endfor %}
+                    {% component "unfold/components/button.html" with submit=1 %}Add override{% endcomponent %}
+                </form>
+            {% endcomponent %}
+
+            {% component "unfold/components/card.html" with title="Add to a quota this month" %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="credits">
+                    {% include "unfold/helpers/form_errors.html" with errors=forms.credits.non_field_errors %}
+                    {% for field in forms.credits %}{% include "unfold/helpers/field.html" %}{% endfor %}
+                    {% component "unfold/components/button.html" with submit=1 %}Add{% endcomponent %}
+                </form>
+            {% endcomponent %}
+        {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {% component "unfold/components/card.html" with title="Subscriptions" %}
+            {% for subscription in subscriptions %}
+                <div class="flex flex-row items-center gap-4 mb-4">
+                    <div class="grow">
+                        {% component "unfold/components/text.html" with class="font-semibold" %}
+                            {{ subscription.plan.name }} · {{ subscription.get_source_display }}
+                            {% if subscription.status == "revoked" %}· revoked{% elif subscription.current_period_end and subscription.current_period_end <= now %}· ended{% endif %}
+                        {% endcomponent %}
+                        {% component "unfold/components/text.html" with class="text-xs" %}
+                            {{ subscription.starts_at|date:"Y-m-d" }} to {% if subscription.current_period_end %}{{ subscription.current_period_end|date:"Y-m-d H:i" }}{% else %}no end{% endif %}
+                            {% if subscription.reason %}· {{ subscription.reason }}{% endif %}
+                            {% if subscription.created_by %}· by {{ subscription.created_by.email }}{% endif %}
+                        {% endcomponent %}
+                    </div>
+                    {% if can.revoke and subscription.status == "active" %}
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="revoke">
+                            <input type="hidden" name="id" value="{{ subscription.pk }}">
+                            {% component "unfold/components/button.html" with submit=1 variant="danger" size="sm" %}Revoke{% endcomponent %}
+                        </form>
+                    {% endif %}
+                </div>
+            {% empty %}
+                {% component "unfold/components/text.html" %}None. They are on the default plan.{% endcomponent %}
+            {% endfor %}
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title="Overrides" %}
+            {% for override in overrides %}
+                <div class="flex flex-row items-center gap-4 mb-4">
+                    <div class="grow">
+                        {% component "unfold/components/text.html" with class="font-semibold" %}
+                            {{ override.feature.name }}: {{ override.get_mode_display }}
+                        {% endcomponent %}
+                        {% component "unfold/components/text.html" with class="text-xs" %}
+                            {% if override.feature.kind == "flag" %}{% if override.enabled %}on{% else %}off{% endif %}{% elif override.unlimited %}unlimited{% else %}{{ override.limit }}{% endif %}
+                            · {% if override.ends_at %}until {{ override.ends_at|date:"Y-m-d H:i" }}{% else %}until removed{% endif %}
+                            · {{ override.reason }}{% if override.created_by %} · by {{ override.created_by.email }}{% endif %}
+                        {% endcomponent %}
+                    </div>
+                    {% if can.remove_override %}
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="remove_override">
+                            <input type="hidden" name="id" value="{{ override.pk }}">
+                            {% component "unfold/components/button.html" with submit=1 variant="default" size="sm" %}Remove{% endcomponent %}
+                        </form>
+                    {% endif %}
+                </div>
+            {% empty %}
+                {% component "unfold/components/text.html" %}None. They get exactly what their plan gives.{% endcomponent %}
+            {% endfor %}
+        {% endcomponent %}
+    </div>
+
+    {% component "unfold/components/card.html" with title="What they are entitled to, and why" %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td class="px-3 py-2 border-b border-base-200 whitespace-nowrap dark:border-base-800">{{ row.key }}</td>
+                            <td class="px-3 py-2 border-b border-base-200 font-semibold text-important whitespace-nowrap dark:border-base-800">{{ row.value }}</td>
+                            <td class="px-3 py-2 border-b border-base-200 text-xs dark:border-base-800">{{ row.steps|join:" → " }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endcomponent %}
+{% endblock %}

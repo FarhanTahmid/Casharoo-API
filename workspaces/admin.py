@@ -1,15 +1,16 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin, TabularInline
 from .models import Workspace, Membership
 
 
-class MembershipInline(admin.TabularInline):
+class MembershipInline(TabularInline):
     model = Membership
     extra = 0
     fields = ['user', 'role', 'added_by']
 
 
 @admin.register(Workspace)
-class WorkspaceAdmin(admin.ModelAdmin):
+class WorkspaceAdmin(ModelAdmin):
     list_display = ['name', 'kind', 'owner', 'default_currency', 'created_at']
     list_filter = ['kind', 'created_at']
     search_fields = ['name', 'owner__email']
@@ -18,7 +19,7 @@ class WorkspaceAdmin(admin.ModelAdmin):
 
 
 @admin.register(Membership)
-class MembershipAdmin(admin.ModelAdmin):
+class MembershipAdmin(ModelAdmin):
     list_display = ['user', 'workspace', 'role', 'created_at']
     list_filter = ['role']
     search_fields = ['user__email', 'workspace__name']

@@ -43,6 +43,9 @@ class Category(WorkspaceOwnedModel):
 
     name = models.CharField(max_length=100)
     kind = models.CharField(max_length=10, choices=KIND_CHOICES, default='expense')
+    # One of the categories every account starts with. Set by the server only;
+    # these do not count toward a plan's limit on custom categories.
+    is_default = models.BooleanField(default=False, editable=False)
 
     class Meta:
         verbose_name_plural = 'Categories'

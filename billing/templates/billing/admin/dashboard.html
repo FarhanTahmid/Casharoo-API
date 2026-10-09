@@ -1,0 +1,123 @@
+{% extends "admin/base.html" %}
+{% load i18n unfold %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block branding %}
+    {% include "unfold/helpers/site_branding.html" %}
+{% endblock %}
+
+{% block content %}
+    {% if billing %}
+        {% if billing.not_enforcing %}
+            {% component "unfold/components/card.html" with class="mb-6" %}
+                {% component "unfold/components/text.html" with class="font-semibold text-red-600" %}
+                    Plan limits are not being enforced: the switch is on "{{ billing.mode_label }}".
+                    <a href="{{ billing.settings_url }}" class="text-primary-600">Billing settings</a>
+                {% endcomponent %}
+            {% endcomponent %}
+        {% endif %}
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {% component "unfold/components/card.html" with href=billing.links.users %}
+                {% component "unfold/components/text.html" %}Users{% endcomponent %}
+                {% component "unfold/components/title.html" %}{{ billing.total_users }}{% endcomponent %}
+                {% component "unfold/components/text.html" with class="text-xs" %}+{{ billing.new_users }} in 7 days{% endcomponent %}
+            {% endcomponent %}
+            {% component "unfold/components/card.html" with href=billing.links.subscriptions %}
+                {% component "unfold/components/text.html" %}On a paid plan{% endcomponent %}
+                {% component "unfold/components/title.html" %}{{ billing.paying }}{% endcomponent %}
+                {% component "unfold/components/text.html" with class="text-xs" %}+{{ billing.new_subscriptions }} subscriptions in 7 days{% endcomponent %}
+            {% endcomponent %}
+            {% component "unfold/components/card.html" with href=billing.links.subscriptions %}
+                {% component "unfold/components/text.html" %}Ending within 7 days{% endcomponent %}
+                {% component "unfold/components/title.html" %}{{ billing.ending_count }}{% endcomponent %}
+                {% component "unfold/components/text.html" with class="text-xs" %}{{ billing.redemptions }} codes redeemed in 30 days{% endcomponent %}
+            {% endcomponent %}
+            {% component "unfold/components/card.html" %}
+                {% component "unfold/components/text.html" %}AI credits used this month{% endcomponent %}
+                {% component "unfold/components/title.html" %}{{ billing.credits_used }}{% endcomponent %}
+                {% component "unfold/components/text.html" with class="text-xs" %}by {{ billing.credits_users }} user{{ billing.credits_users|pluralize }}{% endcomponent %}
+            {% endcomponent %}
+        </div>
+
+        <div class="flex flex-row flex-wrap gap-2 mb-6">
+            {% component "unfold/components/button.html" with href=billing.links.matrix icon="grid_on" %}Edit what plans give{% endcomponent %}
+            {% component "unfold/components/button.html" with href=billing.links.users variant="default" icon="person_search" %}Find a user{% endcomponent %}
+            {% component "unfold/components/button.html" with href=billing.links.new_campaign variant="default" icon="campaign" %}Start a campaign{% endcomponent %}
+            {% component "unfold/components/button.html" with href=billing.links.codes variant="default" icon="confirmation_number" %}Generate promo codes{% endcomponent %}
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            {% component "unfold/components/card.html" with title="Users by plan" %}
+                {% for row in billing.plans %}
+                    {% component "unfold/components/progress.html" with title=row.plan.name description=row.count|stringformat:"d" value=row.percent class="mb-4" %}{% endcomponent %}
+                {% endfor %}
+            {% endcomponent %}
+
+            {% component "unfold/components/card.html" with title="Last 30 days" %}
+                {% for label, count in billing.funnel %}
+                    <div class="flex flex-row items-center mb-2">
+                        {% component "unfold/components/text.html" %}{{ label }}{% endcomponent %}
+                        <strong class="ml-auto text-important">{{ count }}</strong>
+                    </div>
+                {% endfor %}
+            {% endcomponent %}
+
+            {% component "unfold/components/card.html" with title="Running campaigns" %}
+                {% for campaign in billing.campaigns %}
+                    <div class="mb-4">
+                        {% component "unfold/components/text.html" with class="font-semibold" %}
+                            <a href="{% url 'admin:billing_campaign_change' campaign.pk %}" class="text-primary-600">{{ campaign.name }}</a>
+                        {% endcomponent %}
+                        {% component "unfold/components/text.html" with class="text-xs" %}
+                            Ends {{ campaign.ends_at|date:"Y-m-d H:i" }} · claimed {{ campaign.claimed_count }}{% if campaign.max_claims %} of {{ campaign.max_claims }}{% endif %}
+                        {% endcomponent %}
+                    </div>
+                {% empty %}
+                    {% component "unfold/components/text.html" %}None running.{% endcomponent %}
+                {% endfor %}
+                {% component "unfold/components/text.html" with class="mt-4" %}
+                    <a href="{{ billing.links.campaigns }}" class="text-primary-600">All campaigns</a>
+                {% endcomponent %}
+            {% endcomponent %}
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {% component "unfold/components/card.html" with title="Limits users ran into" description="Refusals in the last 30 days: what makes people look at upgrading" %}
+                {% if billing.hits %}
+                    {% component "unfold/components/chart/bar.html" with data=billing.hits_chart height=260 %}{% endcomponent %}
+                    <div class="mt-4">
+                        {% for hit in billing.hits %}
+                            <div class="flex flex-row items-center mb-2">
+                                {% component "unfold/components/text.html" %}{{ hit.name }}{% endcomponent %}
+                                <span class="ml-auto text-xs">{{ hit.hits }} times · {{ hit.users }} user{{ hit.users|pluralize }} · {{ hit.last_week }} this week</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    {% component "unfold/components/text.html" %}Nobody has hit a limit yet.{% endcomponent %}
+                {% endif %}
+                {% component "unfold/components/text.html" with class="mt-4" %}
+                    <a href="{{ billing.links.hits }}" class="text-primary-600">Every refusal</a>
+                {% endcomponent %}
+            {% endcomponent %}
+
+            {% component "unfold/components/card.html" with title="Ending within 7 days" %}
+                {% for subscription in billing.ending %}
+                    <div class="flex flex-row items-center mb-2">
+                        {% component "unfold/components/text.html" %}
+                            <a href="{% url 'admin:billing_user' subscription.user_id %}" class="text-primary-600">{{ subscription.user.email }}</a>
+                            · {{ subscription.plan.name }} · {{ subscription.get_source_display }}
+                        {% endcomponent %}
+                        <span class="ml-auto text-xs whitespace-nowrap">{{ subscription.current_period_end|date:"Y-m-d H:i" }}</span>
+                    </div>
+                {% empty %}
+                    {% component "unfold/components/text.html" %}Nothing ends this week.{% endcomponent %}
+                {% endfor %}
+            {% endcomponent %}
+        </div>
+    {% else %}
+        {% include "unfold/helpers/dashboard_default.html" %}
+    {% endif %}
+{% endblock %}

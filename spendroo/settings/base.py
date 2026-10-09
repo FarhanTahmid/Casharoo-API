@@ -8,6 +8,7 @@ import hashlib
 from dotenv import load_dotenv
 from pathlib import Path
 from decouple import config
+from django.urls import reverse_lazy
 
 load_dotenv()
 
@@ -49,6 +50,8 @@ def database_from_env(prefix):
 # Application definition
 
 DJANGO_APPS = [
+    # The admin theme has to come before the admin it restyles
+    'unfold',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -85,6 +88,7 @@ LOCAL_APPS=[
     'cashbook',
     'ledger_personal',
     'sync',
+    'billing',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -106,6 +110,8 @@ MIDDLEWARE = [
     'pghistory.middleware.HistoryMiddleware',
     # Row-level security: requests see no tenant rows until a view activates a tenant
     'workspaces.tenancy.TenantContextMiddleware',
+    # A request works out each user's plan once
+    'billing.middleware.EntitlementsCacheMiddleware',
     # Logging middleware
     'audit.logger.middleware.LoggerMiddleware',
 ]
@@ -263,8 +269,122 @@ REST_FRAMEWORK = {
         'sync': '6000/hour',
         'username_check': '60/minute',
         'profile_sensitive': '10/hour',
+        # Low, so promo codes cannot be guessed
+        'promo_redeem': '10/hour',
+        'billing_keep': '30/hour',
+        'billing_events': '300/hour',
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # DRF's own, plus a note of every plan refusal for the admin dashboard
+    'EXCEPTION_HANDLER': 'billing.api.handlers.exception_handler',
+}
+
+# Pretend purchases for development and tests (billing/providers/dev.py).
+# Production settings refuse to start with this on.
+BILLING_DEV_TOOLS = False
+
+
+# Admin (django-unfold). The home page is the billing dashboard.
+def _admin_link(name):
+    return reverse_lazy(f'admin:{name}')
+
+
+def _can(permission):
+    return lambda request: request.user.has_perm(permission)
+
+
+# The only web login is the admin's. Its themed form carries no destination when
+# opened directly, and Django would then send staff to /accounts/profile/, which does not exist
+LOGIN_REDIRECT_URL = reverse_lazy('admin:index')
+
+UNFOLD = {
+    'SITE_TITLE': 'Spendroo admin',
+    'SITE_HEADER': 'Spendroo',
+    'SITE_SUBHEADER': 'Control room',
+    'SITE_SYMBOL': 'savings',
+    'SHOW_VIEW_ON_SITE': False,
+    'ENVIRONMENT': 'billing.admin.dashboard.environment',
+    'DASHBOARD_CALLBACK': 'billing.admin.dashboard.dashboard_callback',
+    'SIDEBAR': {
+        'show_search': True,
+        'show_all_applications': True,
+        'navigation': [
+            {
+                'title': 'Overview',
+                'items': [
+                    {'title': 'Dashboard', 'icon': 'dashboard', 'link': _admin_link('index')},
+                ],
+            },
+            {
+                'title': 'Plans',
+                'separator': True,
+                'items': [
+                    {'title': 'Plan matrix', 'icon': 'grid_on', 'link': _admin_link('billing_plan_matrix'),
+                     'permission': _can('billing.view_plan')},
+                    {'title': 'Plans', 'icon': 'workspace_premium', 'link': _admin_link('billing_plan_changelist'),
+                     'permission': _can('billing.view_plan'),
+                     # The matrix and the history sit under the same address and have entries of their own
+                     'active': lambda request: request.path.startswith('/admin/billing/plan/')
+                     and not request.path.startswith(('/admin/billing/plan/matrix/', '/admin/billing/plan/history/'))},
+                    {'title': 'Features', 'icon': 'toggle_on', 'link': _admin_link('billing_feature_changelist'),
+                     'permission': _can('billing.view_feature')},
+                    {'title': 'Store products', 'icon': 'sell', 'link': _admin_link('billing_product_changelist'),
+                     'permission': _can('billing.view_product')},
+                ],
+            },
+            {
+                'title': 'Customers',
+                'separator': True,
+                'items': [
+                    {'title': 'Users', 'icon': 'group', 'link': _admin_link('identity_appuser_changelist'),
+                     'permission': _can('identity.view_appuser')},
+                    {'title': 'Subscriptions', 'icon': 'card_membership',
+                     'link': _admin_link('billing_subscription_changelist'),
+                     'permission': _can('billing.view_subscription')},
+                    {'title': 'Overrides', 'icon': 'tune', 'link': _admin_link('billing_entitlementoverride_changelist'),
+                     'permission': _can('billing.view_entitlementoverride')},
+                    {'title': 'Workspaces', 'icon': 'store', 'link': _admin_link('workspaces_workspace_changelist'),
+                     'permission': _can('workspaces.view_workspace')},
+                ],
+            },
+            {
+                'title': 'Offers',
+                'separator': True,
+                'items': [
+                    {'title': 'Campaigns', 'icon': 'campaign', 'link': _admin_link('billing_campaign_changelist'),
+                     'permission': _can('billing.view_campaign')},
+                    {'title': 'Promo codes', 'icon': 'confirmation_number',
+                     'link': _admin_link('billing_promocode_changelist'),
+                     'permission': _can('billing.view_promocode')},
+                ],
+            },
+            {
+                'title': 'Activity',
+                'separator': True,
+                'items': [
+                    {'title': 'Limit hits and upgrades', 'icon': 'trending_up',
+                     'link': _admin_link('billing_funnelevent_changelist'),
+                     'permission': _can('billing.view_funnelevent')},
+                    {'title': 'Usage', 'icon': 'data_usage', 'link': _admin_link('billing_usagecounter_changelist'),
+                     'permission': _can('billing.view_usagecounter')},
+                    {'title': 'Store events', 'icon': 'receipt_long',
+                     'link': _admin_link('billing_billingevent_changelist'),
+                     'permission': _can('billing.view_billingevent')},
+                    {'title': 'Plan changes', 'icon': 'history', 'link': _admin_link('billing_plan_history'),
+                     'permission': _can('billing.view_plan')},
+                ],
+            },
+            {
+                'title': 'Settings',
+                'separator': True,
+                'items': [
+                    {'title': 'Billing settings', 'icon': 'settings',
+                     'link': _admin_link('billing_billingsettings_changelist'),
+                     'permission': _can('billing.view_billingsettings')},
+                ],
+            },
+        ],
+    },
 }
 
 # OpenAPI schema

@@ -11,6 +11,9 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+from billing import gates
+from billing.entitlements import forget_counts
+from billing.models import Stamp
 from workspaces.models import Workspace
 from workspaces.tenancy import TenantScopedMixin
 from .models import SyncMutation
@@ -30,6 +33,9 @@ _pull_response = inline_serializer('SyncPullResponse', {
     'next_since': serializers.IntegerField(),
     'has_more': serializers.BooleanField(),
     'accessible_cashbook_ids': serializers.ListField(child=serializers.UUIDField()),
+    'billing_stamp': serializers.CharField(
+        help_text='Changes when the plan or what it gives may have changed: fetch /billing/entitlements/ again.',
+    ),
 })
 _mutation = inline_serializer('SyncMutation', {
     'id': serializers.UUIDField(help_text='Made on the device; resending it returns the first result.'),
@@ -47,8 +53,11 @@ _push_response = inline_serializer('SyncPushResponse', {
         'id': serializers.UUIDField(),
         'status': serializers.ChoiceField(choices=['applied', 'rejected']),
         'error': inline_serializer('SyncMutationError', {
-            'code': serializers.CharField(help_text='malformed, forbidden, deleted, immutable, invalid or conflict'),
+            'code': serializers.CharField(
+                help_text='malformed, forbidden, deleted, immutable, invalid, conflict or plan_limit',
+            ),
             'detail': serializers.CharField(),
+            'meta': serializers.DictField(help_text='For plan_limit: feature, reason, limit, current, plan, upgrade_to.'),
         }, required=False),
         'row': serializers.DictField(allow_null=True),
     })),
@@ -136,6 +145,7 @@ class PullView(TenantScopedMixin, APIView):
                     deleted_at__isnull=True, id__in=accessible_cashbook_ids(request.user, role)
                 ).values_list('id', flat=True)
             ),
+            'billing_stamp': Stamp.current(request.user.pk),
         })
 
 
@@ -156,6 +166,8 @@ class PushView(TenantScopedMixin, APIView):
     # Background sync runs often; its own budget keeps it from using up the user's
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'sync'
+    # apply() runs every table's plan_gates
+    billing_gate = gates.GATED
 
     @extend_schema(request=_push_request, responses=_push_response)
     def post(self, request):
@@ -189,12 +201,18 @@ class PushView(TenantScopedMixin, APIView):
             return {'id': str(mutation_id), 'status': SyncMutation.STATUS_REJECTED,
                     'error': {'code': 'malformed', 'detail': 'Mutation id was already used.'}, 'row': None}
         if earlier is None:
-            code, detail = '', ''
+            code, detail, meta = '', '', {}
             try:
                 with transaction.atomic():
                     self.apply(user, workspace, role, table, op, row_id, data)
+                # The next mutation in the batch must see what this one added or removed
+                forget_counts()
             except Rejected as rejection:
                 code, detail = rejection.code, rejection.detail
+            except gates.PlanLimit as limit:
+                code, detail, meta = limit.default_code, limit.message, limit.meta
+                # Here, not in the gate: the block above has rolled back by now
+                gates.record_refusal(limit, user)
             except ValidationError as error:
                 code, detail = 'invalid', '; '.join(error.messages)
             except IntegrityError as error:
@@ -202,7 +220,7 @@ class PushView(TenantScopedMixin, APIView):
             earlier = SyncMutation.objects.create(
                 id=mutation_id, user=user, workspace=workspace, table=table.name, row_id=row_id,
                 status=SyncMutation.STATUS_REJECTED if code else SyncMutation.STATUS_APPLIED,
-                error_code=code, error_detail=detail,
+                error_code=code, error_detail=detail, error_meta=meta,
             )
 
         # The row as the server now holds it, so the client can match it exactly
@@ -212,7 +230,9 @@ class PushView(TenantScopedMixin, APIView):
         ).exists()
         result = {'id': str(mutation_id), 'status': earlier.status, 'row': table.to_row(current) if visible else None}
         if earlier.status == SyncMutation.STATUS_REJECTED:
-            result['error'] = {'code': earlier.error_code, 'detail': earlier.error_detail}
+            result['error'] = {
+                'code': earlier.error_code, 'detail': earlier.error_detail, 'meta': earlier.error_meta,
+            }
         return result
 
     def apply(self, user, workspace, role, table, op, row_id, data):
@@ -234,6 +254,8 @@ class PushView(TenantScopedMixin, APIView):
         if creating:
             obj = table.model(id=row_id, workspace=workspace)
 
+        # Old values of what this push changes, for the plan gates
+        before = None if creating else {}
         for column, value in data.items():
             if column not in table.writable:
                 continue  # unknown or server-owned columns are ignored
@@ -242,6 +264,8 @@ class PushView(TenantScopedMixin, APIView):
             field = table.model._meta.get_field(column)
             if isinstance(field, models.IntegerField) and (isinstance(value, bool) or not isinstance(value, int)):
                 raise Rejected('invalid', f'{column} must be an integer.')
+            if before is not None:
+                before[column] = getattr(obj, column)
             setattr(obj, column, value)
 
         for column, (model, shared_column) in table.references.items():
@@ -267,6 +291,11 @@ class PushView(TenantScopedMixin, APIView):
         obj.full_clean(exclude=['workspace'])
         if not table.can_write(user, role, obj, 'create' if creating else 'update'):
             raise Rejected('forbidden', 'You may not change this.')
+        # What the owner's plan allows. Deletes return above and are never
+        # refused: removing things is how a user gets back under a limit.
+        gates.assert_workspace_writable(workspace, user)
+        for gate in table.plan_gates:
+            gate.check(workspace, obj, creating, before)
         if creating and hasattr(obj, 'created_by_id'):
             obj.created_by = user
         obj.save(force_insert=creating)

@@ -3,8 +3,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 
+from billing import gates
+from billing.api.guards import CashbookPlanGuard
+from billing.catalog.keys import F
 from workspaces.tenancy import TenantScopedMixin
 
 from ..models import (
@@ -16,14 +20,39 @@ from ..serializers import (
     EntryBillsSerializer, EntryExtraFieldsSerializer
 )
 
-class EntryViewSet(TenantScopedMixin, viewsets.ModelViewSet):
+MAX_BILL_BYTES = 5 * 1024 * 1024
+
+
+def bill_storage_key(bill):
+    return f'bill:{bill.id}'
+
+
+class EntryViewSet(CashbookPlanGuard, TenantScopedMixin, viewsets.ModelViewSet):
     """
     ViewSet for managing cashbook entries.
     Supports CRUD operations with role-based access control.
     """
     permission_classes = [CashBookAccessPermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
-    
+
+    def attach_bills(self, entry, files):
+        """
+        Store the files as bills of the entry, counted against the storage of
+        the workspace owner's plan. Call inside a transaction: a file that
+        does not fit raises, and the bills stored before it must go with it.
+        """
+        bills = [EntryBills(entry=entry, bill_file=file, size_bytes=file.size) for file in files]
+        # Count them all before writing any, so a refusal leaves no file behind
+        for bill in bills:
+            gates.store(entry.workspace, bill.size_bytes, bill_storage_key(bill), actor=self.request.user)
+        for bill in bills:
+            bill.save()
+        return bills
+
+    def require_custom_fields(self, cashbook, request):
+        if request.data.get('extra_fields_data'):
+            gates.require(cashbook.workspace, F.ENTRY_CUSTOM_FIELDS)
+
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""
         if self.action == 'list':
@@ -123,26 +152,24 @@ class EntryViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
-        # Create entry with cashbook and user
-        entry = serializer.save(
-            cashbook=cashbook,
-            created_by=request.user
-        )
-        
-        # Handle file uploads (bills)
+        self.require_custom_fields(cashbook, request)
+
         files = request.FILES.getlist('bills')
         for file in files:
-            # Validate file size (5MB limit)
-            if file.size > 5 * 1024 * 1024:
-                entry.soft_delete()
+            if file.size > MAX_BILL_BYTES:
                 return Response(
                     {'error': f'File {file.name} exceeds 5MB limit'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            EntryBills.objects.create(entry=entry, bill_file=file)
-        
+
+        # The entry and its bills are saved together or not at all
+        with transaction.atomic():
+            entry = serializer.save(
+                cashbook=cashbook,
+                created_by=request.user
+            )
+            self.attach_bills(entry, files)
+
         # Return detailed response
         response_serializer = EntryDetailSerializer(entry)
         return Response(
@@ -167,21 +194,20 @@ class EntryViewSet(TenantScopedMixin, viewsets.ModelViewSet):
         
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        entry = serializer.save()
-        
-        # Handle new file uploads if provided
+        self.require_custom_fields(instance.cashbook, request)
+
         files = request.FILES.getlist('bills')
-        if files:
-            for file in files:
-                # Validate file size (5MB limit)
-                if file.size > 5 * 1024 * 1024:
-                    return Response(
-                        {'error': f'File {file.name} exceeds 5MB limit'},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                EntryBills.objects.create(entry=entry, bill_file=file)
-        
+        for file in files:
+            if file.size > MAX_BILL_BYTES:
+                return Response(
+                    {'error': f'File {file.name} exceeds 5MB limit'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        with transaction.atomic():
+            entry = serializer.save()
+            self.attach_bills(entry, files)
+
         # Return detailed response
         response_serializer = EntryDetailSerializer(entry)
         return Response(response_serializer.data)
@@ -229,18 +255,16 @@ class EntryViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        created_bills = []
         for file in files:
-            # Validate file size (5MB limit)
-            if file.size > 5 * 1024 * 1024:
+            if file.size > MAX_BILL_BYTES:
                 return Response(
                     {'error': f'File {file.name} exceeds 5MB limit'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            bill = EntryBills.objects.create(entry=entry, bill_file=file)
-            created_bills.append(bill)
-        
+
+        with transaction.atomic():
+            created_bills = self.attach_bills(entry, files)
+
         serializer = EntryBillsSerializer(created_bills, many=True)
         return Response(
             {
@@ -265,8 +289,11 @@ class EntryViewSet(TenantScopedMixin, viewsets.ModelViewSet):
             )
         
         bill = get_object_or_404(EntryBills, id=bill_id, entry=entry)
-        bill.soft_delete()
-        
+        with transaction.atomic():
+            bill.soft_delete()
+            # The owner gets the space back
+            gates.release_storage(bill_storage_key(bill))
+
         return Response(
             {'message': 'Bill removed successfully'},
             status=status.HTTP_200_OK
@@ -285,7 +312,8 @@ class EntryViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 {'error': 'You do not have permission to add extra fields to this entry'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+        gates.require(entry.workspace, F.ENTRY_CUSTOM_FIELDS)
+
         serializer = EntryExtraFieldsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         extra_field = serializer.save(entry=entry)
@@ -311,11 +339,12 @@ class EntryViewSet(TenantScopedMixin, viewsets.ModelViewSet):
                 {'error': 'You do not have permission to update extra fields'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        
+        gates.require(entry.workspace, F.ENTRY_CUSTOM_FIELDS)
+
         extra_field = get_object_or_404(EntryExtraFields, id=field_id, entry=entry)
-        
+
         serializer = EntryExtraFieldsSerializer(
-            extra_field, 
+            extra_field,
             data=request.data, 
             partial=request.method == 'PATCH'
         )

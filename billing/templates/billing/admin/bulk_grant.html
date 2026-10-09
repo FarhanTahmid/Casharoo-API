@@ -1,0 +1,25 @@
+{% extends "billing/admin/page.html" %}
+{% load unfold %}
+
+{% block page %}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {% component "unfold/components/card.html" with title="Plan to grant" %}
+            <form method="post" novalidate>
+                {% csrf_token %}
+                {% include "unfold/helpers/form_errors.html" with errors=form.non_field_errors %}
+                <div class="flex flex-col gap-4 mb-6">
+                    {% for field in form %}
+                        {% include "unfold/helpers/field.html" %}
+                    {% endfor %}
+                </div>
+                {% component "unfold/components/button.html" with submit=1 %}Grant to {{ users|length }} user{{ users|length|pluralize }}{% endcomponent %}
+            </form>
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title="Who gets it" %}
+            {% for user in users %}
+                {% component "unfold/components/text.html" %}{{ user.email }}{% endcomponent %}
+            {% endfor %}
+        {% endcomponent %}
+    </div>
+{% endblock %}

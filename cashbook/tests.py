@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from billing.testing import grant_plan
 from workspaces.models import Membership
 from workspaces.services import create_workspace, get_personal_workspace
 from .models import CashBook, Entry, EntryCategory
@@ -35,6 +36,9 @@ class CashBookTestCase(TestCase):
         self.bob = User.objects.create_user(email='bob@example.com', password='pass-12345')
         self.alice_client = client_for(self.alice)
         self.bob_client = client_for(self.bob)
+        # These tests are about cashbooks, roles and reports, not about what a
+        # plan allows (billing/tests cover that), so the owner gets everything
+        grant_plan(self.alice, 'business')
 
     def create_book(self, client, **data):
         response = client.post(BOOKS, {'book_name': 'Shop cash', **data})

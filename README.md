@@ -11,6 +11,7 @@ Django 5.2 + Django REST Framework on PostgreSQL. One deployable plus a backgrou
 | `cashbook` | Cashbooks, entries, categories, payment methods, reports. |
 | `ledger_personal` | Personal mode: accounts, categories, transactions (incl. transfers), budgets. |
 | `sync` | Offline sync for the app: change log pull and idempotent mutation push. |
+| `billing` | Plans, limits, subscriptions, promo codes and campaigns, run from the admin. See [docs/billing.md](docs/billing.md). |
 | `notifications` | Email accounts, email queue backend and task. |
 | `audit` | Request logging, `CRUDLog`. |
 
@@ -47,6 +48,7 @@ Tests: `python manage.py test`.
 - `/api/v1/me/avatar/` `POST` (multipart `file`) sets the picture, `DELETE` removes it, `GET` serves it.
   The app crops it; the server checks it is a JPEG, PNG or WEBP of 5 MB or less and stores a 512px JPEG without metadata.
 - `POST /api/v1/workspaces/` creates a business; an optional client `id` makes retries return the same workspace.
+- `/api/v1/billing/` the user's plan and what it gives, public plans, promo codes, offers. See [docs/billing.md](docs/billing.md).
 - `/health/` liveness; `/health/?db=1` also checks the database.
 
 ## Rules the code relies on
@@ -54,6 +56,10 @@ Tests: `python manage.py test`.
 - **One account per email.** The username defaults to the part of the email before the `@`;
   when that is taken (case-insensitively) it gets 4 random digits (`identity/usernames.py`).
 
+- **Plans are data.** What a plan gives is edited in the admin and applies at once. Code asks
+  `billing.gates` and never reads a plan's name. A refusal is HTTP 402 `plan_limit`, never 403
+  (the app takes 403 for an ended session and wipes the device). Nothing is deleted for a plan:
+  what is over a limit becomes read-only. Tests fail for a synced table or write view with no plan check declared.
 - **Money** is an integer in minor units (`amount_minor`) plus an ISO 4217 `currency`. No floats.
 - **Tenant data** lives in models that inherit `WorkspaceOwnedModel`. Each such table needs
   `workspaces.rls.enable_rls` in a migration, and each view on it needs `TenantScopedMixin`.

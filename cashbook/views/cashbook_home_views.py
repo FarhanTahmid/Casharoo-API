@@ -17,15 +17,20 @@ from ..serializers import (
 )
 from ..permissions import IsCashBookOwnerOrMember, IsCashBookOwner
 from audit.utils.audit_utils import AuditLogMixin
+from billing import gates
+from billing.api.guards import CashbookPlanGuard
+from billing.catalog.keys import F
 from workspaces.tenancy import TenantScopedMixin
 from workspaces.models import Membership
 
 
-class CashBookHomeViewSet(TenantScopedMixin, viewsets.ModelViewSet, AuditLogMixin):
+class CashBookHomeViewSet(CashbookPlanGuard, TenantScopedMixin, viewsets.ModelViewSet, AuditLogMixin):
     """
     ViewSet for CashBook CRUD operations with comprehensive error handling
     """
     permission_classes = [IsAuthenticated]
+    # The book is the object itself here, not a parent in the URL
+    cashbook_kwarg = 'pk'
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['book_name', 'description']
     ordering_fields = ['created_at', 'updated_at']
@@ -122,7 +127,12 @@ class CashBookHomeViewSet(TenantScopedMixin, viewsets.ModelViewSet, AuditLogMixi
             )
     
     def perform_create(self, serializer):
-        instance = serializer.save(created_by=self.request.user)
+        workspace = serializer.validated_data['workspace']
+        # One transaction, so two requests at once cannot both take the last place
+        with transaction.atomic():
+            gates.assert_workspace_writable(workspace, self.request.user)
+            gates.check_limit(workspace, F.BUSINESS_CASHBOOKS)
+            instance = serializer.save(created_by=self.request.user)
         self.log_action(
             request=self.request,
             action='CREATE',
@@ -352,6 +362,8 @@ class CashBookHomeViewSet(TenantScopedMixin, viewsets.ModelViewSet, AuditLogMixi
                     grant = serializer.save(cashbook=cashbook, added_by=request.user)
                     # A per-book grant implies staff membership of the workspace
                     if not cashbook.workspace.memberships.filter(user=grant.member).exists():
+                        # Someone new to the workspace takes a seat on the owner's plan
+                        gates.check_limit(cashbook.workspace, F.TEAM_SEATS)
                         Membership.objects.create(
                             workspace=cashbook.workspace, user=grant.member,
                             role=Membership.ROLE_STAFF, added_by=request.user

@@ -277,6 +277,8 @@ class EntryBills(WorkspaceOwnedModel):
         null=False,
         blank=False,
         upload_to=get_user_bill_filepath,
+        # The folder alone is about 150 characters (three ids); the default of 100 fits no file
+        max_length=300,
         validators=[
             FileExtensionValidator(
                 allowed_extensions=allowed_extensions,
@@ -284,6 +286,8 @@ class EntryBills(WorkspaceOwnedModel):
             )
         ]
     )
+    # Counted against the owner's attachment storage, and given back on removal
+    size_bytes = models.PositiveBigIntegerField(default=0, editable=False)
 
     class Meta:
         verbose_name = "Bill of Entry"

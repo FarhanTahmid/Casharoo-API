@@ -2,6 +2,8 @@ import hashlib
 
 from django.urls import reverse
 from rest_framework import serializers
+
+from billing import payload as billing_payload
 from .models import AppUser, UserSettings
 
 
@@ -12,6 +14,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
     # Kept on UserSettings, shown here so the app needs one call after login
     onboarded_at = serializers.DateTimeField(required=False, allow_null=True)
     primary_mode = serializers.ChoiceField(choices=UserSettings.MODE_CHOICES, required=False, allow_blank=True)
+    # The plan and what it gives, so the app knows after login without a second call.
+    # Read-only: nothing a client sends can change it.
+    entitlements = serializers.SerializerMethodField()
 
     SETTINGS_FIELDS = ('onboarded_at', 'primary_mode')
 
@@ -19,9 +24,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = AppUser
         fields = ('id', 'email', 'username', 'first_name', 'last_name',
                  'full_name', 'bio', 'phone', 'avatar_url', 'has_password', 'date_joined',
-                 'onboarded_at', 'primary_mode')
+                 'onboarded_at', 'primary_mode', 'entitlements')
         # The username changes through /me/username/ (password-checked), the picture through /me/avatar/
         read_only_fields = ('id', 'email', 'username', 'date_joined')
+
+    def get_entitlements(self, user) -> dict:
+        return billing_payload.build(user)
 
     def get_has_password(self, user) -> bool:
         # Accounts made with Google have none until the user sets one
