@@ -34,15 +34,25 @@ Tests: `python manage.py test`.
 - `/api/v1/` application endpoints. Schema at `/api/v1/schema/`, Swagger at `/api/v1/docs/`.
 - `/_allauth/app/v1/` sign-up, login, logout, email verification, password reset, Google sign-in, MFA, sessions.
   Login returns `meta.session_token`; send it on every request as `X-Session-Token`.
+  Log in with `{"email": ...}` or `{"username": ...}` plus `password` (one of the two, not both).
+  Password change is `POST /_allauth/app/v1/account/password/change` with `current_password` and `new_password`.
 - `/api/v1/sync/pull/?workspace=<id>&since=<seq>` changes since a cursor, per table, tombstones included.
 - `/api/v1/sync/push/` a batch of client mutations (`upsert`/`delete`), each with a client UUID so retries apply once.
   Upserts carry only the changed columns, so concurrent edits to different fields both survive.
   Sync has its own rate limit (`sync` scope), separate from the rest of the API.
 - `/api/v1/me/` profile, plus `onboarded_at` and `primary_mode` so onboarding is asked once per account.
+  `has_password` is false for Google-only accounts; `avatar_url` changes whenever the picture does.
+- `GET /api/v1/me/username/check/?username=x` whether a username is free, with suggestions when it is taken.
+- `POST /api/v1/me/username/` changes the username; needs `password` unless the account has none.
+- `/api/v1/me/avatar/` `POST` (multipart `file`) sets the picture, `DELETE` removes it, `GET` serves it.
+  The app crops it; the server checks it is a JPEG, PNG or WEBP of 5 MB or less and stores a 512px JPEG without metadata.
 - `POST /api/v1/workspaces/` creates a business; an optional client `id` makes retries return the same workspace.
 - `/health/` liveness; `/health/?db=1` also checks the database.
 
 ## Rules the code relies on
+
+- **One account per email.** The username defaults to the part of the email before the `@`;
+  when that is taken (case-insensitively) it gets 4 random digits (`identity/usernames.py`).
 
 - **Money** is an integer in minor units (`amount_minor`) plus an ISO 4217 `currency`. No floats.
 - **Tenant data** lives in models that inherit `WorkspaceOwnedModel`. Each such table needs

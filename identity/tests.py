@@ -1,10 +1,22 @@
+import importlib
+import os
 import re
+import shutil
+import tempfile
+from io import BytesIO
+from unittest import mock
 
+from allauth.account.adapter import get_adapter
 from django.core import mail
 from django.core.cache import cache
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, transaction
+from django.test import RequestFactory, TestCase, override_settings
+from PIL import Image
 from rest_framework.test import APIClient
+from rest_framework.throttling import SimpleRateThrottle
 
+from audit.models import CRUDLog
 from workspaces.models import Workspace
 from .models import AppUser
 
@@ -152,3 +164,283 @@ class SchemaTests(AuthTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('/api/v1/cashbooks/', response.data['paths'])
         self.assertIn('/api/v1/me/', response.data['paths'])
+        for path in ('/api/v1/me/username/', '/api/v1/me/username/check/', '/api/v1/me/avatar/'):
+            self.assertIn(path, response.data['paths'])
+
+
+def png_bytes(size=(1024, 1024), mode='RGBA'):
+    out = BytesIO()
+    Image.new(mode, size, (200, 30, 30, 128) if mode == 'RGBA' else (200, 30, 30)).save(out, 'PNG')
+    return out.getvalue()
+
+
+class UsernameGenerationTests(AuthTestCase):
+    def test_username_is_the_email_part_before_the_at(self):
+        user = AppUser.objects.create_user(email='farhantahmidwork@gmail.com', password=PASSWORD)
+        self.assertEqual(user.username, 'farhantahmidwork')
+
+    def test_taken_username_gets_four_random_digits(self):
+        AppUser.objects.create_user(email='farhantahmidwork@gmail.com', password=PASSWORD)
+        second = AppUser.objects.create_user(email='farhantahmidwork@yahoo.com', password=PASSWORD)
+        self.assertRegex(second.username, r'^farhantahmidwork\d{4}$')
+
+    def test_case_only_clash_counts_as_taken(self):
+        AppUser.objects.create_user(email='Bob@x.com', password=PASSWORD)
+        second = AppUser.objects.create_user(email='bob@y.com', password=PASSWORD)
+        self.assertRegex(second.username, r'^bob\d{4}$')
+
+    def test_signup_through_allauth_uses_the_same_rule(self):
+        self.signup('carol@example.com')
+        self.signup('carol@example.org')
+        self.assertEqual(AppUser.objects.get(email='carol@example.com').username, 'carol')
+        self.assertRegex(AppUser.objects.get(email='carol@example.org').username, r'^carol\d{4}$')
+
+    def test_google_signup_uses_the_same_rule(self):
+        AppUser.objects.create_user(email='dave@gmail.com', password=PASSWORD)
+        user = AppUser(email='dave@company.com')
+        get_adapter().populate_username(RequestFactory().get('/'), user)
+        self.assertRegex(user.username, r'^dave\d{4}$')
+
+    def test_one_account_per_email(self):
+        self.signup('erin@example.com')
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            AppUser.objects.create_user(email='erin@example.com', password=PASSWORD)
+        self.post('/signup', {'email': 'erin@example.com', 'password': PASSWORD})
+        self.assertEqual(AppUser.objects.filter(email__iexact='erin@example.com').count(), 1)
+
+    def test_database_rejects_case_only_duplicate(self):
+        AppUser.objects.create_user(email='a@x.com', username='Frank', password=PASSWORD)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            AppUser.objects.create_user(email='b@x.com', username='frank', password=PASSWORD)
+
+    def test_migration_gives_later_clashing_accounts_digits(self):
+        migration = importlib.import_module('identity.migrations.0003_dedupe_usernames_case_insensitive')
+        renames = migration.resolve_clashes([(1, 'Sam'), (2, 'sam'), (3, 'other'), (4, 'SAM')])
+        self.assertEqual(set(renames), {2, 4})
+        self.assertRegex(renames[2], r'^sam\d{4}$')
+        self.assertRegex(renames[4], r'^SAM\d{4}$')
+        self.assertNotEqual(renames[2].lower(), renames[4].lower())
+
+
+class UsernameLoginTests(AuthTestCase):
+    def setUp(self):
+        super().setUp()
+        self.signup('grace@example.com')
+
+    def test_login_with_username(self):
+        response = self.post('/login', {'username': 'grace', 'password': PASSWORD})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()['meta']['session_token'])
+
+    def test_username_login_ignores_case(self):
+        response = self.post('/login', {'username': 'GRACE', 'password': PASSWORD})
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_login_with_email_still_works(self):
+        response = self.post('/login', {'email': 'grace@example.com', 'password': PASSWORD})
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_wrong_password_with_username(self):
+        response = self.post('/login', {'username': 'grace', 'password': 'wrong-password'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_email_and_username_together_are_rejected(self):
+        response = self.post('/login', {'username': 'grace', 'email': 'grace@example.com', 'password': PASSWORD})
+        self.assertEqual(response.status_code, 400)
+
+
+class UsernameCheckTests(AuthTestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = AppUser.objects.create_user(email='heidi@example.com', password=PASSWORD)
+        AppUser.objects.create_user(email='ivan@example.com', password=PASSWORD)
+        self.client.force_authenticate(self.user)
+
+    def check(self, username):
+        response = self.client.get('/api/v1/me/username/check/', {'username': username})
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()
+
+    def test_free_username(self):
+        self.assertEqual(self.check('newname'),
+                         {'available': True, 'current': False, 'reason': None, 'message': None, 'suggestions': []})
+
+    def test_taken_username_comes_with_free_suggestions(self):
+        result = self.check('IVAN')
+        self.assertEqual((result['available'], result['reason']), (False, 'taken'))
+        self.assertEqual(len(result['suggestions']), 3)
+        for suggestion in result['suggestions']:
+            self.assertRegex(suggestion, r'^IVAN\d{4}$')
+            self.assertFalse(AppUser.objects.filter(username__iexact=suggestion).exists())
+
+    def test_own_username_is_available_and_current(self):
+        result = self.check('Heidi')
+        self.assertEqual((result['available'], result['current']), (True, True))
+
+    def test_invalid_usernames(self):
+        for username in ('a@b', 'has space', '', 'x' * 151):
+            result = self.check(username)
+            self.assertEqual((result['available'], result['reason']), (False, 'invalid'), username)
+
+    def test_needs_authentication(self):
+        self.client.force_authenticate(None)
+        self.assertIn(self.client.get('/api/v1/me/username/check/?username=x').status_code, (401, 403))
+
+    def test_is_rate_limited(self):
+        with mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'username_check': '2/minute'}):
+            codes = [self.client.get('/api/v1/me/username/check/?username=x').status_code for _ in range(3)]
+        self.assertEqual(codes, [200, 200, 429])
+
+
+class ChangeUsernameTests(AuthTestCase):
+    def setUp(self):
+        super().setUp()
+        self.signup('judy@example.com')  # verified, so it can log in again later
+        self.user = AppUser.objects.get(email='judy@example.com')
+        AppUser.objects.create_user(email='mallory@example.com', password=PASSWORD)
+        self.client.force_authenticate(self.user)
+
+    def change(self, data):
+        return self.client.post('/api/v1/me/username/', data, format='json')
+
+    def test_change_with_password_then_log_in_with_it(self):
+        response = self.change({'username': 'judy.new', 'password': PASSWORD})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['username'], 'judy.new')
+        self.assertTrue(CRUDLog.objects.filter(user=self.user, operation='username_changed').exists())
+
+        self.client.force_authenticate(None)
+        login = self.post('/login', {'username': 'judy.new', 'password': PASSWORD})
+        self.assertEqual(login.status_code, 200, login.content)
+
+    def test_wrong_or_missing_password(self):
+        for data in ({'username': 'judy.new', 'password': 'nope'}, {'username': 'judy.new'}):
+            response = self.change(data)
+            self.assertEqual(response.status_code, 400)
+            self.assertIn('password', response.json())
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, 'judy')
+
+    def test_taken_username(self):
+        response = self.change({'username': 'Mallory', 'password': PASSWORD})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('username', response.json())
+
+    def test_invalid_username(self):
+        response = self.change({'username': 'judy@home', 'password': PASSWORD})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('username', response.json())
+
+    def test_changing_case_of_own_username(self):
+        response = self.change({'username': 'Judy', 'password': PASSWORD})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()['username'], 'Judy')
+
+    def test_account_without_password_needs_none(self):
+        self.user.set_unusable_password()
+        self.user.save()
+        self.assertFalse(self.client.get('/api/v1/me/').json()['has_password'])
+        response = self.change({'username': 'judy.google'})
+        self.assertEqual(response.status_code, 200, response.content)
+
+    def test_profile_patch_cannot_change_username(self):
+        self.client.patch('/api/v1/me/', {'username': 'sneaky'}, format='json')
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.username, 'judy')
+
+
+class AvatarTests(AuthTestCase):
+    def setUp(self):
+        super().setUp()
+        media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, media, ignore_errors=True)
+        override = override_settings(MEDIA_ROOT=media)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.user = AppUser.objects.create_user(email='kim@example.com', password=PASSWORD)
+        self.client.force_authenticate(self.user)
+
+    def upload(self, content, name='me.png', content_type='image/png'):
+        with self.captureOnCommitCallbacks(execute=True):
+            return self.client.post('/api/v1/me/avatar/',
+                                    {'file': SimpleUploadedFile(name, content, content_type=content_type)},
+                                    format='multipart')
+
+    def stored_image(self):
+        self.user.refresh_from_db()
+        return Image.open(self.user.profile_picture.path)
+
+    def test_upload_is_shrunk_to_a_small_jpeg_without_metadata(self):
+        original = png_bytes()
+        response = self.upload(original)
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertRegex(response.json()['avatar_url'], r'^/api/v1/me/avatar/\?v=\w+$')
+        image = self.stored_image()
+        self.assertEqual((image.format, image.size), ('JPEG', (512, 512)))
+        self.assertFalse(image.getexif())
+        self.assertLess(self.user.profile_picture.size, len(original))
+        self.assertTrue(CRUDLog.objects.filter(user=self.user, operation='avatar_changed').exists())
+
+    def test_small_picture_is_not_enlarged(self):
+        self.upload(png_bytes((200, 200), 'RGB'))
+        self.assertEqual(self.stored_image().size, (200, 200))
+
+    def test_non_square_picture_is_centre_cropped(self):
+        self.upload(png_bytes((1200, 600), 'RGB'))
+        self.assertEqual(self.stored_image().size, (512, 512))
+
+    def test_file_that_is_not_a_picture_is_rejected(self):
+        response = self.upload(b'not really a png', name='fake.png')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('file', response.json())
+
+    def test_unsupported_format_is_rejected(self):
+        out = BytesIO()
+        Image.new('RGB', (50, 50)).save(out, 'GIF')
+        self.assertEqual(self.upload(out.getvalue(), name='a.gif', content_type='image/gif').status_code, 400)
+
+    def test_file_over_5mb_is_rejected(self):
+        response = self.upload(png_bytes() + b'0' * (5 * 1024 * 1024))
+        self.assertEqual(response.status_code, 400)
+
+    def test_replacing_deletes_the_old_file(self):
+        first_url = self.upload(png_bytes()).json()['avatar_url']
+        self.user.refresh_from_db()
+        first_path = self.user.profile_picture.path
+        second_url = self.upload(png_bytes((800, 800))).json()['avatar_url']
+        self.assertNotEqual(first_url, second_url)
+        self.assertFalse(os.path.exists(first_path))
+
+    def test_remove(self):
+        self.upload(png_bytes())
+        self.user.refresh_from_db()
+        path = self.user.profile_picture.path
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertEqual(self.client.delete('/api/v1/me/avatar/').status_code, 204)
+        self.assertIsNone(self.client.get('/api/v1/me/').json()['avatar_url'])
+        self.assertFalse(os.path.exists(path))
+        self.assertEqual(self.client.get('/api/v1/me/avatar/').status_code, 404)
+
+    def test_served_only_to_the_signed_in_owner(self):
+        self.upload(png_bytes())
+        response = self.client.get('/api/v1/me/avatar/')
+        self.assertEqual((response.status_code, response['Content-Type']), (200, 'image/jpeg'))
+        self.client.force_authenticate(None)
+        self.assertIn(self.client.get('/api/v1/me/avatar/').status_code, (401, 403))
+
+
+class PasswordChangeExtraTests(AuthTestCase):
+    def change(self, token, data):
+        return self.client.post('/_allauth/app/v1/account/password/change', data,
+                                format='json', headers={'X-Session-Token': token})
+
+    def test_wrong_current_password_is_rejected(self):
+        token = self.signup()
+        response = self.change(token, {'current_password': 'not-it-123', 'new_password': 'new-long-pass-456'})
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(AppUser.objects.get(email='alice@example.com').check_password(PASSWORD))
+
+    def test_change_is_audited(self):
+        token = self.signup()
+        self.change(token, {'current_password': PASSWORD, 'new_password': 'new-long-pass-456'})
+        self.assertTrue(CRUDLog.objects.filter(operation='password_changed').exists())

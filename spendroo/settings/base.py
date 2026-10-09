@@ -145,7 +145,10 @@ PASSWORD_HASHERS = [
 # headless API (/_allauth/app/v1/) and sends its session token in X-Session-Token.
 HEADLESS_ONLY = True
 HEADLESS_CLIENTS = ('app',)
-ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_ADAPTER = 'identity.adapters.AccountAdapter'
+# One account per email. Log in with either; the username is made from the email
+ACCOUNT_LOGIN_METHODS = {'email', 'username'}
+ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*']
 ACCOUNT_EMAIL_VERIFICATION = 'mandatory'
 # Codes typed into the app, no links: nothing to deep-link and no web frontend needed
@@ -258,6 +261,8 @@ REST_FRAMEWORK = {
         'anon': '100/hour',
         'user': '1000/hour',
         'sync': '6000/hour',
+        'username_check': '60/minute',
+        'profile_sensitive': '10/hour',
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
