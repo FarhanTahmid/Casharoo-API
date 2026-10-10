@@ -40,13 +40,22 @@ class Category(WorkspaceOwnedModel):
         'Shopping', 'Entertainment', 'Mobile & Internet', 'Gifts & Donations', 'Other',
     ]
     DEFAULT_INCOME = ['Salary', 'Business', 'Gift', 'Other income']
+    # The starting categories each get a colour of their own, from the palette
+    # the app offers, so no two of them look alike in a chart
+    DEFAULT_COLORS = {
+        'Food': '#F08A3C', 'Transport': '#3B9EE5', 'Housing': '#2F6FD0', 'Utilities': '#F5B530',
+        'Health': '#D9485F', 'Education': '#7A5AF8', 'Shopping': '#E05C9A', 'Entertainment': '#B65FD6',
+        'Mobile & Internet': '#12A5C4', 'Gifts & Donations': '#E8705F', 'Other': '#6B7C93',
+        'Salary': '#2DB86F', 'Business': '#1FA6A0', 'Gift': '#8BBF3F', 'Other income': '#A9793E',
+    }
 
     name = models.CharField(max_length=100)
     kind = models.CharField(max_length=10, choices=KIND_CHOICES, default='expense')
     # One of the categories every account starts with. Set by the server only;
     # these do not count toward a plan's limit on custom categories.
     is_default = models.BooleanField(default=False, editable=False)
-    # Chosen by the user; without one the app picks a colour itself
+    # A starting category begins with its DEFAULT_COLORS entry; otherwise chosen
+    # by the user, and without one the app picks a colour itself
     color = models.CharField(max_length=7, null=True, blank=True, validators=[hex_color])
 
     class Meta:

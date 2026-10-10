@@ -138,6 +138,11 @@ class PushTests(SyncTestCase):
         self.assertEqual((saved.workspace, saved.version, saved.created_by, saved.currency),
                          (self.shop, 2, self.alice, 'BDT'))
 
+    def test_starting_categories_have_colours_of_their_own(self):
+        colours = dict(Category.objects.filter(workspace=self.personal).values_list('name', 'color'))
+        self.assertEqual(colours, Category.DEFAULT_COLORS)
+        self.assertEqual(len(set(colours.values())), len(Category.DEFAULT_EXPENSE) + len(Category.DEFAULT_INCOME))
+
     def test_category_colours(self):
         food = Category.objects.get(workspace=self.personal, name='Food')
         book = self.upsert('cashbooks', book_name='Till', currency='BDT')
