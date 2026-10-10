@@ -23,7 +23,7 @@ class CashBookAdditionalMemberSerializer(serializers.ModelSerializer):
 class EntryCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = EntryCategory
-        fields = ['id', 'category_name', 'is_default', 'created_at']
+        fields = ['id', 'category_name', 'color', 'is_default', 'created_at']
         read_only_fields = ['id', 'is_default', 'created_at']
 
 

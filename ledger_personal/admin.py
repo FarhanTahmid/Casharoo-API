@@ -15,7 +15,7 @@ class AccountAdmin(ModelAdmin):
 
 @admin.register(Category)
 class CategoryAdmin(ModelAdmin):
-    list_display = ['name', 'kind', 'is_default', 'workspace']
+    list_display = ['name', 'kind', 'color', 'is_default', 'workspace']
     list_filter = ['kind', 'is_default']
     search_fields = ['name', 'workspace__owner__email']
     readonly_fields = SYNC_READONLY + ['is_default']

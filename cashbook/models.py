@@ -4,7 +4,7 @@ from django.db import models, transaction
 from django.core.validators import FileExtensionValidator
 from django.db.models import F, Q, Sum
 
-from workspaces.models import AliveManager, Membership, WorkspaceOwnedModel
+from workspaces.models import AliveManager, Membership, WorkspaceOwnedModel, hex_color
 
 
 class CashBookQuerySet(models.QuerySet):
@@ -153,6 +153,8 @@ class EntryCategory(WorkspaceOwnedModel):
     cashbook = models.ForeignKey(CashBook, on_delete=models.CASCADE, null=False, blank=False)
     category_name = models.CharField(max_length=100, null=False, blank=False)
     is_default = models.BooleanField(default=False)
+    # Chosen by the user; without one the app picks a colour itself
+    color = models.CharField(max_length=7, null=True, blank=True, validators=[hex_color])
 
     class Meta:
         verbose_name = "Entry Category"

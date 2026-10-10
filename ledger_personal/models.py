@@ -3,7 +3,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 
-from workspaces.models import WorkspaceOwnedModel
+from workspaces.models import WorkspaceOwnedModel, hex_color
 
 
 class Account(WorkspaceOwnedModel):
@@ -46,6 +46,8 @@ class Category(WorkspaceOwnedModel):
     # One of the categories every account starts with. Set by the server only;
     # these do not count toward a plan's limit on custom categories.
     is_default = models.BooleanField(default=False, editable=False)
+    # Chosen by the user; without one the app picks a colour itself
+    color = models.CharField(max_length=7, null=True, blank=True, validators=[hex_color])
 
     class Meta:
         verbose_name_plural = 'Categories'

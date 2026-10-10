@@ -138,6 +138,27 @@ class PushTests(SyncTestCase):
         self.assertEqual((saved.workspace, saved.version, saved.created_by, saved.currency),
                          (self.shop, 2, self.alice, 'BDT'))
 
+    def test_category_colours(self):
+        food = Category.objects.get(workspace=self.personal, name='Food')
+        book = self.upsert('cashbooks', book_name='Till', currency='BDT')
+        rent = self.upsert('entry_categories', cashbook_id=book['row_id'], category_name='Rent', color='#3B9EE5')
+        results = self.push(
+            self.alice_client, self.personal,
+            self.upsert('categories', str(food.id), color='#E8705F'),
+            self.upsert('categories', name='Pets', kind='expense', color='red'),  # not #RRGGBB
+        )
+        self.assertEqual([r.get('error', {}).get('code') for r in results], [None, 'invalid'])
+        self.assertEqual([r['status'] for r in self.push(self.alice_client, self.shop, book, rent)], ['applied'] * 2)
+
+        pulled = self.pull(self.alice_client, self.personal)['changes']['categories']
+        self.assertEqual({row['name']: row['color'] for row in pulled}['Food'], '#E8705F')
+        self.assertEqual(self.pull(self.alice_client, self.shop)['changes']['entry_categories'][0]['color'], '#3B9EE5')
+
+        # Back to the colour the app picks
+        self.push(self.alice_client, self.personal, self.upsert('categories', str(food.id), color=None))
+        food.refresh_from_db()
+        self.assertEqual((food.color, food.name), (None, 'Food'))
+
     def test_personal_ledger_tables(self):
         account = Account.objects.get(workspace=self.personal)
         category = Category.objects.filter(workspace=self.personal, kind='expense').first()

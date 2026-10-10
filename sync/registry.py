@@ -95,7 +95,7 @@ def accessible_cashbook_ids(user, role):
 
 
 class EntryCategoryTable(CashBookChildTable):
-    writable = ['cashbook_id', 'category_name', 'is_default']
+    writable = ['cashbook_id', 'category_name', 'is_default', 'color']
     immutable = ['cashbook_id']
     references = {'cashbook_id': (CashBook, None)}
     required_permission = 'admin'
@@ -149,7 +149,7 @@ class AccountTable(WorkspaceLevelTable):
 
 
 class CategoryTable(WorkspaceLevelTable):
-    writable = ['name', 'kind']
+    writable = ['name', 'kind', 'color']
     # Set by the server on the categories an account starts with
     read_only = ['is_default']
     plan_gates = [

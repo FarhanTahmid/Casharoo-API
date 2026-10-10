@@ -1,9 +1,13 @@
 import pghistory
 from django.conf import settings
+from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
 
 from spendroo.ids import uuid7
+
+# A colour the user picked for something of theirs, as '#RRGGBB'
+hex_color = RegexValidator(r'^#[0-9A-Fa-f]{6}\Z', 'Enter a colour as #RRGGBB.')
 
 
 class AliveManager(models.Manager):

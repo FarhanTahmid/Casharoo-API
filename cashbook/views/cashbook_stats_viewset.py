@@ -295,6 +295,7 @@ class CashBookStatsViewSet(TenantScopedMixin, viewsets.ViewSet):
         # Group by category
         breakdown = entries.values(
             'category__category_name',
+            'category__color',
             'entry_type'
         ).annotate(
             total=Sum('amount_minor'),
@@ -308,6 +309,7 @@ class CashBookStatsViewSet(TenantScopedMixin, viewsets.ViewSet):
             if category not in result:
                 result[category] = {
                     'category_name': category,
+                    'color': item['category__color'],
                     'cash_in_minor': 0,
                     'cash_out_minor': 0,
                     'cash_in_count': 0,

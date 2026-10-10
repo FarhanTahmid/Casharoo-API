@@ -62,14 +62,14 @@ class CashBookAdditionalMemberAdmin(ModelAdmin):
 
 @admin.register(EntryCategory)
 class EntryCategoryAdmin(ModelAdmin):
-    list_display = ['category_name', 'cashbook', 'is_default', 'created_at']
+    list_display = ['category_name', 'cashbook', 'color', 'is_default', 'created_at']
     list_filter = ['is_default', 'created_at']
     search_fields = ['category_name', 'cashbook__book_name']
     readonly_fields = ['id', 'created_at']
     
     fieldsets = (
         ('Category Information', {
-            'fields': ('id', 'cashbook', 'category_name', 'is_default')
+            'fields': ('id', 'cashbook', 'category_name', 'color', 'is_default')
         }),
         ('Metadata', {
             'fields': ('created_at',)
